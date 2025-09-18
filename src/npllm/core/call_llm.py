@@ -3,20 +3,20 @@ from typing import List, Dict, Any
 from litellm import acompletion
 import logging
 from dotenv import load_dotenv
-from npllm.core.type import Type
 import json
+from importlib import resources
+
+from npllm.core.type import Type
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-system_prompt_template_path = "src/npllm/core/prompts/system_prompt_template.md"
-user_prompt_template_path = "src/npllm/core/prompts/user_prompt_template.md"
-
-with open(system_prompt_template_path, "r") as f:
+prompts = resources.files('npllm.core.prompts')
+with open(prompts / "system_prompt_template.md", "r") as f:
     system_prompt_template = f.read()
 
-with open(user_prompt_template_path, "r") as f:
+with open(prompts / "user_prompt_template.md", "r") as f:
     user_prompt_template = f.read()
 
 @dataclass
