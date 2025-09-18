@@ -1,2 +1,1 @@
-# npllm
-No Prompt LLM
+# npllm - No Prompt For LLM
