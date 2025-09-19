@@ -31,6 +31,8 @@ class CallSite(ABC):
                     return AssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
                 elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
                     return AnnAssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                elif isinstance(node, ast.Return) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
+                    return ReturnCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
                 elif isinstance(node, ast.Call) and node.func.attr == method_name:
                     # here means that there is indeed a call to the method on the current line of code,
                     # but the call is not in an if expression, assignment statement, or assignment statement with type annotation
@@ -224,4 +226,35 @@ class AnnAssignCallSite(CallSite):
         if type:
             return type
 
+        raise RuntimeError(f"Cannot parse return type at line {self._absolute_call_line_number} for method {self._method_name} in {self._module_filename}")
+    
+class ReturnCallSite(CallSite):
+    """
+    The caller node is an ast.Return node
+
+    Example:
+    async def f() -> int:
+        llm = LLM()
+        return await llm.reason(...)
+    """
+    def _parse_return_type(self) -> Type:
+        # self._caller_node is an ast.Return node, 
+        # so we need to walk up the AST tree to find the return type annotation of the enclosing function
+        # and we assume the enclosing function is the first ast.FunctionDef node we encounter when walking up the AST tree
+        parent: ast.AsyncFunctionDef = None
+        for node in ast.walk(self._tree):
+            if isinstance(node, ast.AsyncFunctionDef):
+                parent = node
+                break
+
+        if not parent:
+            raise RuntimeError(f"Cannot find enclosing function for return statement at line {self._absolute_call_line_number} in {self._module_filename}")
+        
+        if not parent.returns:
+            return AnyType()
+        
+        type = Type.from_annotation(parent.returns, self)
+        if type:
+            return type
+        
         raise RuntimeError(f"Cannot parse return type at line {self._absolute_call_line_number} for method {self._method_name} in {self._module_filename}")
