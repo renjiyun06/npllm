@@ -2,12 +2,15 @@ from abc import ABC, abstractmethod
 import ast
 import typing
 from types import FrameType
-from typing import Dict
+from typing import Dict, Optional
 import inspect
 from dataclasses import is_dataclass
+import logging
 
 from npllm.core.type import Type, BasicType, AnyType, TupleType
-from npllm.utils.notebook_util import is_in_notebook, cell_source
+from npllm.utils.notebook_util import is_in_notebook, cell_source, get_dataclass_source
+
+logger = logging.getLogger(__name__)
 
 class CallSite(ABC):
     """
@@ -53,6 +56,7 @@ class CallSite(ABC):
         """At relative_call_line_number of the source code, the method with method_name is called by the caller_node in the AST tree"""
         # the frame of the caller
         self._frame = frame
+        self._module = inspect.getmodule(frame)
         self._tree = tree
         self._caller_node: ast.AST = caller_node
         self._source = source
@@ -76,17 +80,39 @@ class CallSite(ABC):
     def _parse_return_type(self) -> Type:
         pass
 
+    def get_module_file_tree(self) -> Optional[ast.AST]:
+        return self._module_file_tree
+
     def get_return_type(self) -> Type:
         return self._return_type
 
-    def get_dataclass(self, class_name, parent_class) -> typing.Type:
+    def get_dataclass(self, class_name, parent_class) -> Optional[typing.Type]:
         """
-        Get the class object by its name in the caller's frame.
+        Get the class by its name in the caller's frame
+
         If the class can be find in the globals of the caller's frame, return it.
-        Otherwise try to find it in the parent_class's module if parent_class is not None.
+        Otherwise try to find it in the parent_class's module if parent_class is not None, for example:
+
+        module a.py:
+        @dataclass
+        class A:
+            x: int
+            y: str
+        
+        module b.py:
+        from a import A
+        @dataclass
+        class B:
+            a: A
+
+        Here if we want to find class A in the call site of module b.py, we can find it in the module of class B
         """
         if class_name in self._frame.f_globals:
-            return self._frame.f_globals[class_name]
+            dataclass_cls = self._frame.f_globals[class_name]
+            if is_dataclass(dataclass_cls):
+                return dataclass_cls
+            else:
+                return None
         
         if not parent_class or not is_dataclass(parent_class):
             return None
@@ -94,9 +120,34 @@ class CallSite(ABC):
         parent_class_module = parent_class.__module__
         module = __import__(parent_class_module)
         dataclass_cls = getattr(module, class_name, None)
-        if dataclass_cls is None or not is_dataclass(dataclass_cls):
+        if dataclass_cls and is_dataclass(dataclass_cls):
+            return dataclass_cls
+
+        return None
+    
+    def get_dataclass_source(self, dataclass_cls) -> Optional[str]:
+        """
+        Get the source code of the dataclass
+
+        Here we need to handle two cases:
+        1. the dataclass have source file, we can get the source code by inspect.getsource
+        2. the dataclass is defined in a notebook, we need to get the source code from the notebook cells
+        """
+        if not dataclass_cls or not is_dataclass(dataclass_cls):
             return None
-        return dataclass_cls
+        
+        try:
+            source = inspect.getsource(dataclass_cls)
+            return source
+        except Exception as e:
+            logger.debug(f"Cannot get source of dataclass {dataclass_cls.__qualname__} by inspect.getsource: {e}")
+            if self.is_in_notebook():
+                return get_dataclass_source(dataclass_cls)
+        
+        return None
+    
+    def get_module(self):
+        return self._module
 
     def is_in_notebook(self) -> bool:
         return is_in_notebook(self._frame)
@@ -175,7 +226,7 @@ class AssignCallSite(CallSite):
             return AnyType()
         
         annotation = declaration_node.annotation
-        type = Type.from_annotation(annotation, self)
+        type = Type.from_annotation(annotation, self, None)
         if type:
             return type
 
@@ -222,7 +273,7 @@ class AnnAssignCallSite(CallSite):
     def _parse_return_type(self) -> Type:
         caller_node: ast.AnnAssign = self._caller_node
         annotation = caller_node.annotation
-        type = Type.from_annotation(annotation, self)
+        type = Type.from_annotation(annotation, self, None)
         if type:
             return type
 
@@ -253,7 +304,7 @@ class ReturnCallSite(CallSite):
         if not parent.returns:
             return AnyType()
         
-        type = Type.from_annotation(parent.returns, self)
+        type = Type.from_annotation(parent.returns, self, None)
         if type:
             return type
         

@@ -69,12 +69,18 @@ class LLM:
             # assemble the code context
             # code context includes:
             # 1. the source code of all related dataclass, including the dataclass of the arguments and the return type
-            # 2. role as a comment of the caller function
-            # 3. the source code of the caller function
+            # 2. the type alias
+            # 3. role as a comment of the caller function
+            # 4. the source code of the caller function
             dataclass_source_lines = []
             for dataclass_source in call_site.related_dataclass_sources(args, kwargs).values():
                 dataclass_source_lines.extend(dataclass_source.splitlines())
                 dataclass_source_lines.append("")
+
+            type_alias_sources = []
+            for type_alias_source in expected_return_type.type_alias_sources().values():
+                type_alias_sources.append(type_alias_source)
+                type_alias_sources.append("")
 
             role_comment_lines = []
             if self.role and self.role.strip():
@@ -84,8 +90,8 @@ class LLM:
 
             source_lines = source.splitlines()
 
-            call_line_number = relative_call_line_number + len(dataclass_source_lines) + len(role_comment_lines)
-            code_context = dataclass_source_lines + role_comment_lines + source_lines
+            call_line_number = relative_call_line_number + len(dataclass_source_lines) + len(type_alias_sources) + len(role_comment_lines)
+            code_context = dataclass_source_lines + type_alias_sources + role_comment_lines + source_lines
 
             llm_call_info = LLMCallInfo(
                 call_id=call_id,
@@ -97,7 +103,6 @@ class LLM:
                 call_line_number=call_line_number,
                 model=self.model
             )
-
             return await call_llm(llm_call_info)
 
         return llm_method_handler

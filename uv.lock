@@ -1160,6 +1160,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.51.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/3a/f30f3c92da3a285dcbe469c50b058f2d349dc9a20fc1b60c3219befda53f/json_repair-0.51.0.tar.gz", hash = "sha256:487e00042d5bc5cc4897ea9c3cccd4f6641e926b732cc09f98691a832485098a", size = 35289, upload-time = "2025-09-19T04:23:16.745Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/fc/eb15e39547b29dbf2b786bbbd1e79e7f1d87ec4e7c9ea61786f093181481/json_repair-0.51.0-py3-none-any.whl", hash = "sha256:871f7651ee82abf72efc50a80d3a9af0ade8abf5b4541b418eeeabe4e677e314", size = 26263, upload-time = "2025-09-19T04:23:15.064Z" },
+]
+
+[[package]]
 name = "json5"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1760,6 +1769,7 @@ name = "npllm"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
+    { name = "json-repair" },
     { name = "jupyterlab" },
     { name = "litellm" },
 ]
@@ -1774,6 +1784,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "json-repair", specifier = ">=0.51.0" },
     { name = "jupyterlab", specifier = ">=4.4.7" },
     { name = "litellm", specifier = ">=1.77.1" },
 ]

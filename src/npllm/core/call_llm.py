@@ -4,6 +4,7 @@ from litellm import acompletion
 import logging
 from dotenv import load_dotenv
 import json
+import json_repair
 from importlib import resources
 
 from npllm.core.type import Type
@@ -54,11 +55,25 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
         messages=messages
     )
     content = response.choices[0].message.content.strip()
-    json_obj = json.loads(content[len("```json"):-len("```")].strip())
+    logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n\n""")
+
+    try:
+        json_obj = json.loads(content[len("```json"):-len("```")].strip())
+    except Exception as e_1:
+        logger.warning(f"Failed to parse JSON from LLM response for {llm_call_info.call_id}, error: {e_1}, response content: {content}. Try to repair the JSON.")
+        try:
+            json_obj = json_repair.loads(content[len("```json"):-len("```")].strip())
+        except Exception as e_2:
+            logger.error(f"Failed to repair JSON from LLM response for {llm_call_info.call_id}, error: {e_2}, response content: {content}.")
+            # here we just raise the original exception
+            # TODO we can try to call llm again to repair the JSON
+            raise e_2
 
     value = json_obj.get("value", None)
     reasoning = json_obj.get("reasoning", None)
     logger.debug(f"""Reasoning from LLM for {llm_call_info.call_id}: \n\n{reasoning}\n\n""")
+    format_analysis = json_obj.get("format_analysis", None)
+    logger.debug(f"""Format Analysis from LLM for {llm_call_info.call_id}: \n\n{format_analysis}\n\n""")
 
     result = llm_call_info.expected_return_type.convert(value, "value")
     logger.info(f"Successfully called LLM for {llm_call_info.call_id}")

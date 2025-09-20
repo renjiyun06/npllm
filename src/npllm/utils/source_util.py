@@ -1,7 +1,10 @@
-from typing import List
+from typing import List, Optional
 
-def remove_indentation(source_code: str) -> str:
+def remove_indentation(source_code: str) -> Optional[str]:
     """Remove common leading indentation from all lines in the source code"""
+    if not source_code:
+        return None
+
     lines = source_code.splitlines()
     if not lines:
         return source_code
