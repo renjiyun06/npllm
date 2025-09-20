@@ -1,5 +1,9 @@
 # Program Integration Instructions
 
+## YOUR ROLE
+
+{{role}}
+
 ## YOUR CONTEXT
 
 You are operating within the program AAA. The complete program context is:

@@ -40,6 +40,7 @@ class LLM:
         self.role: str = role
         if not self.role and self.__class__.__name__ != "LLM":
             self.role = self.__class__.__doc__ or ""
+        self.role = self.role.strip() if self.role.strip() else "You are a helpful assistant"
         self.model: str = model
         self._llm_kwargs = kwargs
 
@@ -83,19 +84,14 @@ class LLM:
                 type_alias_sources.append(type_alias_source)
                 type_alias_sources.append("")
 
-            role_comment_lines = []
-            if self.role and self.role.strip():
-                # populate the role template with the instance variables
-                role = self.role.strip().format(**self.__dict__)
-                role_comment_lines = f"""\"\"\"\n{role}\n\"\"\"""".splitlines()
-
             source_lines = source.splitlines()
 
-            call_line_number = relative_call_line_number + len(dataclass_source_lines) + len(type_alias_sources) + len(role_comment_lines)
-            code_context = dataclass_source_lines + type_alias_sources + role_comment_lines + source_lines
+            call_line_number = relative_call_line_number + len(dataclass_source_lines) + len(type_alias_sources)
+            code_context = dataclass_source_lines + type_alias_sources + source_lines
 
             llm_call_info = LLMCallInfo(
                 call_id=call_id,
+                role=self.role,
                 method_name=method_name,
                 args=args,
                 kwargs=kwargs,

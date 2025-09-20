@@ -23,6 +23,7 @@ with open(prompts / "user_prompt_template.md", "r") as f:
 @dataclass
 class LLMCallInfo:
     call_id: str
+    role: str
     code_context: str
     call_line_number: int
     method_name: str
@@ -34,7 +35,10 @@ class LLMCallInfo:
 
 async def call_llm(llm_call_info: LLMCallInfo) -> Any:
     logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model} with args {llm_call_info.llm_kwargs}")
-    system_prompt = _populate_prompt_template(system_prompt_template, {"{{code_context}}": llm_call_info.code_context})
+    system_prompt = _populate_prompt_template(system_prompt_template, {
+        "{{role}}": llm_call_info.role,
+        "{{code_context}}": llm_call_info.code_context
+    })
     user_prompt = _populate_prompt_template(user_prompt_template, {
         "{{call_line_number}}": str(llm_call_info.call_line_number),
         "{{method_name}}": llm_call_info.method_name,
