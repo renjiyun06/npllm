@@ -68,7 +68,7 @@ class LLMCompiler(LLM):
     You are a compiler that strictly translates an imperative programming language into AST
     """
     def __init__(self):
-        LLM.__init__(self)
+        LLM.__init__(self, reasoning={"effort": "medium"})
 
     async def compile(self, program: str) -> Program:
         return await self.reason(program)
