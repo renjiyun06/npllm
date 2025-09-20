@@ -36,11 +36,12 @@ class LLM:
 
     There is no prompt at all, all the context is from the code itself, including the comments.
     """
-    def __init__(self, role=None, model="openrouter/google/gemini-2.5-flash"):
+    def __init__(self, role=None, model="openrouter/google/gemini-2.5-flash", **kwargs):
         self.role: str = role
         if not self.role and self.__class__.__name__ != "LLM":
             self.role = self.__class__.__doc__ or ""
         self.model: str = model
+        self._llm_kwargs = kwargs
 
     def __getattr__(self, method_name: str) -> Callable:
         async def llm_method_handler(*args, **kwargs) -> Any:
@@ -101,7 +102,8 @@ class LLM:
                 expected_return_type=expected_return_type,
                 code_context=add_line_number(code_context),
                 call_line_number=call_line_number,
-                model=self.model
+                model=self.model,
+                llm_kwargs=self._llm_kwargs,
             )
             return await call_llm(llm_call_info)
 

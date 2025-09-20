@@ -30,9 +30,10 @@ class LLMCallInfo:
     kwargs: Dict[Any, Any]
     expected_return_type: Type
     model: str
+    llm_kwargs: Dict[str, Any]
 
 async def call_llm(llm_call_info: LLMCallInfo) -> Any:
-    logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model}")
+    logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model} with args {llm_call_info.llm_kwargs}")
     system_prompt = _populate_prompt_template(system_prompt_template, {"{{code_context}}": llm_call_info.code_context})
     user_prompt = _populate_prompt_template(user_prompt_template, {
         "{{call_line_number}}": str(llm_call_info.call_line_number),
@@ -52,7 +53,8 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
 
     response = await acompletion(
         model=llm_call_info.model,
-        messages=messages
+        messages=messages,
+        **llm_call_info.llm_kwargs
     )
     content = response.choices[0].message.content.strip()
     logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n\n""")
