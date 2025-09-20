@@ -1,4 +1,4 @@
-# npllm: Natural Programming with Large Language Models
+# npllm: No Prompt Large Language Model
 
 **npllm** is a cutting-edge Python library that seamlessly integrates Large Language Models (LLMs) into your code. It transforms LLM interactions from a string-based, prompt-engineering hassle into a native, type-safe, and context-aware programming experience.
 
