@@ -3,7 +3,7 @@ import logging
 logging.basicConfig(level=logging.WARNING, format='%(name)s - %(levelname)s - %(message)s')
 
 npllm_logger = logging.getLogger('npllm')
-npllm_logger.setLevel(logging.WARNING)
+npllm_logger.setLevel(logging.DEBUG)
 
 from prompt_toolkit.shortcuts import PromptSession
 from dataclasses import dataclass

@@ -47,8 +47,8 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
         "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
     })
 
-    logger.debug(f"""System Prompt for {llm_call_info.call_id}: \n\n{system_prompt}\n\n""")
-    logger.debug(f"""User Prompt for {llm_call_info.call_id}: \n\n{user_prompt}\n\n""")
+    logger.debug(f"""System Prompt for {llm_call_info.call_id}: \n\n{system_prompt}\n""")
+    logger.debug(f"""User Prompt for {llm_call_info.call_id}: \n\n{user_prompt}\n""")
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -61,7 +61,7 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
         **llm_call_info.llm_kwargs
     )
     content = response.choices[0].message.content.strip()
-    logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n\n""")
+    logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n""")
 
     # llm's response following the below format:
     # <RESULT>
@@ -92,15 +92,15 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
         logger.warning(f"Failed to parse JSON from LLM response for {llm_call_info.call_id}, error: {e_1}, try to repair the JSON")
         try:
             json_value = json_repair.loads(json_str)
-            logger.debug(f"Successfully repaired JSON from LLM response for {llm_call_info.call_id}, repaired JSON: \n\n{json.dumps(json_value, indent=2)}\n\n")
+            logger.debug(f"Successfully repaired JSON from LLM response for {llm_call_info.call_id}, repaired JSON: \n\n{json.dumps(json_value, indent=2)}\n")
         except Exception as e_2:
             logger.error(f"Failed to repair JSON from LLM response for {llm_call_info.call_id}, error: {e_2}")
             # here we just raise the original exception
             # TODO we can try to call llm again to repair the JSON
             raise e_2
 
-    logger.debug(f"""Context Understanding from LLM for {llm_call_info.call_id}: \n\n{context_understanding}\n\n""")
-    logger.debug(f"""Computation Logic from LLM for {llm_call_info.call_id}: \n\n{computation_logic}\n\n""")
+    logger.debug(f"""Context Understanding from LLM for {llm_call_info.call_id}: \n\n{context_understanding}\n""")
+    logger.debug(f"""Computation Logic from LLM for {llm_call_info.call_id}: \n\n{computation_logic}\n""")
 
     result = llm_call_info.expected_return_type.convert(json_value, "__root", strict=False)
     logger.info(f"Successfully called LLM for {llm_call_info.call_id}")
