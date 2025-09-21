@@ -63,25 +63,40 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
     content = response.choices[0].message.content.strip()
     logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n\n""")
 
+    # llm's response following the below format:
+    # <RESULT>
+    # ...
+    # </RESULT>
+    # <REASONING>
+    # ...
+    # </REASONING>
+
+    json_str = None
+    reasoning = None
+    if "<RESULT>" in content and "</RESULT>" in content:
+        json_str = content.split("<RESULT>")[1].split("</RESULT>")[0].strip()
+    if "<REASONING>" in content and "</REASONING>" in content:
+        reasoning = content.split("<REASONING>")[1].split("</REASONING>")[0].strip()
+
+    if json_str.startswith("```json") and json_str.endswith("```"):
+        json_str = json_str[len("```json"):-len("```")].strip()
+
     try:
-        json_obj = json.loads(content[len("```json"):-len("```")].strip())
+        json_value = json.loads(json_str)
     except Exception as e_1:
-        logger.warning(f"Failed to parse JSON from LLM response for {llm_call_info.call_id}, error: {e_1}, response content: {content}. Try to repair the JSON.")
+        logger.warning(f"Failed to parse JSON from LLM response for {llm_call_info.call_id}, error: {e_1}, try to repair the JSON")
         try:
-            json_obj = json_repair.loads(content[len("```json"):-len("```")].strip())
+            json_value = json_repair.loads(json_str)
+            logger.debug(f"Successfully repaired JSON from LLM response for {llm_call_info.call_id}, repaired JSON: \n\n{json.dumps(json_value, indent=2)}\n\n")
         except Exception as e_2:
-            logger.error(f"Failed to repair JSON from LLM response for {llm_call_info.call_id}, error: {e_2}, response content: {content}.")
+            logger.error(f"Failed to repair JSON from LLM response for {llm_call_info.call_id}, error: {e_2}")
             # here we just raise the original exception
             # TODO we can try to call llm again to repair the JSON
             raise e_2
-
-    value = json_obj.get("value", None)
-    reasoning = json_obj.get("reasoning", None)
+    
     logger.debug(f"""Reasoning from LLM for {llm_call_info.call_id}: \n\n{reasoning}\n\n""")
-    format_analysis = json_obj.get("format_analysis", None)
-    logger.debug(f"""Format Analysis from LLM for {llm_call_info.call_id}: \n\n{format_analysis}\n\n""")
-
-    result = llm_call_info.expected_return_type.convert(value, "value")
+        
+    result = llm_call_info.expected_return_type.convert(json_value, "__root", strict=False)
     logger.info(f"Successfully called LLM for {llm_call_info.call_id}")
     return result
 

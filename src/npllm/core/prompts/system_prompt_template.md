@@ -25,17 +25,33 @@ Your task is to provide the return value for a specific method call within this 
 
 ## RESPONSE FORMAT
 
-Return your computation result in this JSON format:
+Return your response using exactly this format:
 
-```json
-{"value": ..., "reasoning": "...", "format_analysis": "..."}
-```
+<RESULT>
+[Your JSON computation result here]
+</RESULT>
+<REASONING>
+[Your reasoning explanation here]
+</REASONING>
 
-The `value` field must strictly match the `expected_return_type` provided in the method invocation.
+### RESULT Section Requirements
 
-### Value Type Requirements
+- Must contain valid JSON that strictly matches the expected_return_type (see TYPE MAPPING RULES below)
+- Use compressed single-line JSON format
+- Properly escape all JSON string values
+- Use unquoted numbers unless string type is explicitly required
 
-To ensure your `value` strictly matches the `expected_return_type`, follow these type mapping rules:
+### REASONING Section Requirements
+
+Provide a brief explanation covering:
+
+- Your understanding of the current execution context and your role within the program (IMPORTANT)
+- The computational logic and decision process for this specific method call
+- How your output maintains consistency with the overall program flow
+
+### TYPE MAPPING RULES
+
+To ensure your JSON result strictly matches the `expected_return_type`, follow these type mapping rules:
 
 - `str | int | float | bool` -> JSON primitive types
 - `List[...]` -> JSON array  
@@ -45,28 +61,16 @@ To ensure your `value` strictly matches the `expected_return_type`, follow these
   
   ```json
   {
-    "__type_index": "Selected type index (0-based)",
-    "__type_name": "Selected type name", 
+    "__type_name": "Selected type name (MUST PROVIDE)",
     "__value": { ... }
   }
   ```
 
-  For example, for `Union[str, int, Demo]`,
-  if the selected type is `int`, the JSON would be:
+  For example, for `Union[str, int, Demo]`:
+  If the selected type is `Demo`, the JSON would be:
   
   ```json
   {
-    "__type_index": 1,
-    "__type_name": "int",
-    "__value": 42
-  }
-  ```
-
-  if the selected type is `Demo`, the JSON would be:
-  
-  ```json
-  {
-    "__type_index": 2,
     "__type_name": "Demo",
     "__value": { ... }
   }
@@ -78,58 +82,19 @@ To ensure your `value` strictly matches the `expected_return_type`, follow these
   For example:
   if `AliasType = List[Dict[str, int]]`, then `AliasType` should be treated as `List[Dict[str, int]]`
   if `AliasType = Union[str, List[int]]`, then `AliasType` should be treated as `Union[str, List[int]]`
-- Custom types -> JSON object matching type definition
+- Custom class -> JSON object matching type definition (IMPORTANT: Always return complete object structure, even for single-field class):
+  
+  For example, for:
+  
+  ```python
+  class Demo:
+      s: str
+  ```
 
-### Reasoning Field
-
-Provide a brief explanation covering:
-
-1. Your understanding of the current execution context and your role within the program
-2. The computational logic and decision process for this specific method call
-3. How your output maintains consistency with the overall program flow
-
-### Format Analysis Field
-
-The format_analysis field records your detailed thinking process about return value formatting and type conversion to ensure the returned value strictly conforms to the expected_return_type requirements.
-Must Include Analysis Content:
-
-1. Type Identification & Parsing
-   - Clearly identify the specific type of expected_return_type
-   - If it's a type alias, explain the resolved underlying type
-   - If it's a composite type, explain its structural components
-
-2. Union Type Handling (when applicable)
-   - List all optional types in the Union with their indices
-   - Explain the basis and reasoning for selecting the specific type
-   - Confirm the correctness of `__type_index` and `__type_name`
-   - Explain why this type was chosen over other options
-
-3. JSON Format Conversion
-   - Explain the conversion process from computation result to JSON format
-   - Special type conversion explanations (e.g., Tuple to Array)
-   - Data type matching verification (e.g., ensure numbers aren't accidentally converted to strings)
-
-4. Edge Case Handling
-   - Optional type null value handling
-   - Any type contextual inference
-   - Custom type object structure construction
-
-#### Format Template
-
-Type Analysis: [Analysis of expected_return_type]
-Selection Basis: [Why this specific type/value was chosen]
-Conversion Process: [Steps from computation result to JSON]
-Validation Check: [Checkpoints confirming format correctness]
-
-#### Quality Requirements
-
-Specificity: Avoid vague descriptions, clearly explain each conversion step
-Completeness: Cover the entire process from type identification to final JSON output
-Accuracy: Ensure analysis matches the actual returned value format exactly
-Conciseness: Focus on key points, avoid redundant information
-
-### OTHER OUTPUT SPECIFICATIONS
-
-- Properly escape all JSON string values
-- Use unquoted numbers unless string type required
-- Return compressed single-line JSON
+  The JSON would be:
+  
+  ```json
+  {
+    "s": "v",
+  }
+  ```
