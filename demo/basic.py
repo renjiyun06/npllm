@@ -57,7 +57,7 @@ async def f_return_stmt() -> int:
     return await llm.reason()
 
 async def main():
-    pass
+    print(await f_optional())
 
 if __name__ == "__main__":
     import asyncio

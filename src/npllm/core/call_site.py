@@ -17,7 +17,15 @@ class CallSite(ABC):
     The call site of a method at a specific line of code
     """
     @classmethod
-    def call_site(cls, frame: FrameType, source: str, relative_call_line_number: int, absolute_call_line_number: int, method_name: str) -> 'CallSite':
+    def call_site(
+        cls, 
+        frame: FrameType, 
+        source: str, 
+        relative_call_line_number: int, 
+        absolute_call_line_number: int, 
+        method_name: str,
+        sync: bool = False
+    ) -> 'CallSite':
         tree = ast.parse(source)
         if not is_in_notebook(frame):
             module_filename = inspect.getmodule(frame).__file__
@@ -26,21 +34,37 @@ class CallSite(ABC):
 
         for node in ast.walk(tree):
             if hasattr(node, 'lineno') and node.lineno == relative_call_line_number:
-                if isinstance(node, ast.If) and isinstance(node.test, ast.Await) and node.test.value.func.attr == method_name:
-                    return IfCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
-                elif isinstance(node, ast.While) and isinstance(node.test, ast.Await) and node.test.value.func.attr == method_name:
-                    return WhileCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
-                elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
-                    return AssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
-                elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
-                    return AnnAssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
-                elif isinstance(node, ast.Return) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
-                    return ReturnCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
-                elif isinstance(node, ast.Call) and node.func.attr == method_name:
-                    # here means that there is indeed a call to the method on the current line of code,
-                    # but the call is not in an if expression, assignment statement, or assignment statement with type annotation
-                    raise RuntimeError(f"Call site for method {method_name} at line {absolute_call_line_number} in {module_filename} is not supported yet")
-
+                if not sync:
+                    if isinstance(node, ast.If) and isinstance(node.test, ast.Await) and node.test.value.func.attr == method_name:
+                        return IfCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.While) and isinstance(node.test, ast.Await) and node.test.value.func.attr == method_name:
+                        return WhileCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
+                        return AssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
+                        return AnnAssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.Return) and isinstance(node.value, ast.Await) and node.value.value.func.attr == method_name:
+                        return ReturnCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.Call) and node.func.attr == method_name:
+                        # here means that there is indeed a call to the method on the current line of code,
+                        # but the call is not in an if expression, assignment statement, or assignment statement with type annotation
+                        raise RuntimeError(f"Call site for method {method_name} at line {absolute_call_line_number} in {module_filename} is not supported yet")
+                else:
+                    if isinstance(node, ast.If) and isinstance(node.test, ast.Call) and node.test.func.attr == method_name:
+                        return IfCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.While) and isinstance(node.test, ast.Call) and node.test.func.attr == method_name:
+                        return WhileCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and node.value.func.attr == method_name:
+                        return AssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Call) and node.value.func.attr == method_name:
+                        return AnnAssignCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.Return) and isinstance(node.value, ast.Call) and node.value.func.attr == method_name:
+                        return ReturnCallSite(frame, tree, node, source, module_filename, relative_call_line_number, absolute_call_line_number, method_name)
+                    elif isinstance(node, ast.Call) and node.func.attr == method_name:
+                        # here means that there is indeed a call to the method on the current line of code,
+                        # but the call is not in an if expression, assignment statement, or assignment statement with type annotation
+                        raise RuntimeError(f"Call site for method {method_name} at line {absolute_call_line_number} in {module_filename} is not supported yet")
+        
         raise RuntimeError(f"Cannot find call site for method {method_name} at line {absolute_call_line_number} in {module_filename}")
     
     def __init__(
@@ -223,7 +247,7 @@ class AssignCallSite(CallSite):
 
         if not declaration_node:
             # we cannot find the declaration of the target variable, return AnyType
-            return AnyType()
+            return AnyType(None)
         
         annotation = declaration_node.annotation
         type = Type.from_annotation(annotation, self, None)
