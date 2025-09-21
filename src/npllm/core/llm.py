@@ -130,7 +130,24 @@ class LLM:
                 module = sys.modules[module_name]
                 module_source = inspect.getsource(module)
                 relative_call_line_number = 1
-                source = remove_indentation("\n".join(module_source.splitlines()[absolute_call_line_number - 1: absolute_call_line_number]))
+                # we need the extract the current line and the comments just before it by checking the indentation
+                current_line = module_source.splitlines()[absolute_call_line_number - 1]
+                indentation = len(current_line) - len(current_line.lstrip())
+                i = absolute_call_line_number - 2
+                while i >= 0:
+                    line = module_source.splitlines()[i]
+                    if line.strip() == "":
+                        # empty line, continue
+                        i -= 1
+                        continue
+                    current_indentation = len(line) - len(line.lstrip())
+                    if current_indentation == indentation and line.lstrip().startswith("#"):
+                        i -= 1
+                        continue
+                    break
+                relative_call_line_number = absolute_call_line_number - i - 1
+                source = remove_indentation("\n".join(module_source.splitlines()[i + 1: absolute_call_line_number]))
+                print(source)
             else:
                 source = remove_indentation(inspect.getsource(caller_frame.f_code))
                 relative_call_line_number = caller_frame.f_lineno - caller_frame.f_code.co_firstlineno + 1
