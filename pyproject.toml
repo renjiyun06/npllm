@@ -25,5 +25,11 @@ dev = [
     "black>=25.1.0",
     "prompt-toolkit>=3.0.52",
     "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
     "twine>=6.2.0",
+]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:httpx.*",
 ]
