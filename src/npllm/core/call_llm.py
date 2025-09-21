@@ -67,16 +67,21 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
     # <RESULT>
     # ...
     # </RESULT>
-    # <REASONING>
+    # <CONTEXT_UNDERSTANDING>
     # ...
-    # </REASONING>
+    # </CONTEXT_UNDERSTANDING>
+    # <COMPUTATION_LOGIC>
+    # ...
+    # </COMPUTATION_LOGIC>
 
     json_str = None
     reasoning = None
     if "<RESULT>" in content and "</RESULT>" in content:
         json_str = content.split("<RESULT>")[1].split("</RESULT>")[0].strip()
-    if "<REASONING>" in content and "</REASONING>" in content:
-        reasoning = content.split("<REASONING>")[1].split("</REASONING>")[0].strip()
+    if "<CONTEXT_UNDERSTANDING>" in content and "</CONTEXT_UNDERSTANDING>" in content:
+        context_understanding = content.split("<CONTEXT_UNDERSTANDING>")[1].split("</CONTEXT_UNDERSTANDING>")[0].strip()
+    if "<COMPUTATION_LOGIC>" in content and "</COMPUTATION_LOGIC>" in content:
+        computation_logic = content.split("<COMPUTATION_LOGIC>")[1].split("</COMPUTATION_LOGIC>")[0].strip()
 
     if json_str.startswith("```json") and json_str.endswith("```"):
         json_str = json_str[len("```json"):-len("```")].strip()
@@ -93,9 +98,10 @@ async def call_llm(llm_call_info: LLMCallInfo) -> Any:
             # here we just raise the original exception
             # TODO we can try to call llm again to repair the JSON
             raise e_2
-    
-    logger.debug(f"""Reasoning from LLM for {llm_call_info.call_id}: \n\n{reasoning}\n\n""")
-        
+
+    logger.debug(f"""Context Understanding from LLM for {llm_call_info.call_id}: \n\n{context_understanding}\n\n""")
+    logger.debug(f"""Computation Logic from LLM for {llm_call_info.call_id}: \n\n{computation_logic}\n\n""")
+
     result = llm_call_info.expected_return_type.convert(json_value, "__root", strict=False)
     logger.info(f"Successfully called LLM for {llm_call_info.call_id}")
     return result
