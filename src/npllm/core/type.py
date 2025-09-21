@@ -129,7 +129,10 @@ class BasicType(Type):
         Type.__init__(self, parent_type)
         self._type = type
 
-    def convert(self, value, field_path):
+    def convert(self, value, field_path, strict=False):
+        if strict:
+            return self.convert_strict(value, field_path)
+        
         if value is None:
             return None
     
@@ -145,6 +148,27 @@ class BasicType(Type):
             return float(value)
         elif self._type == "bool":
             return bool(value)
+        
+        raise RuntimeError(f"Unknown basic type: {self._type}")
+    
+    def convert_strict(self, value, field_path):
+        if value is None:
+            return None
+        
+        if self._type == "str":
+            if not isinstance(value, str):
+                raise ValueConversionError(f"{field_path} expected to be str, but got {type(value).__name__}")
+            return value
+
+        if self._type in ("int", "float"):
+            if not isinstance(value, int) and not isinstance(value, float):
+                raise ValueConversionError(f"{field_path} expected to be int or float, but got {type(value).__name__}")
+            return value
+        
+        elif self._type == "bool":
+            if not isinstance(value, bool):
+                raise ValueConversionError(f"{field_path} expected to be bool, but got {type(value).__name__}")
+            return value
         
         raise RuntimeError(f"Unknown basic type: {self._type}")
 
@@ -195,7 +219,7 @@ class ListType(Type):
         visited.add(self)
         return self._item_type.type_alias_sources(visited)
 
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
         if value is None:
             return None
         
@@ -204,7 +228,7 @@ class ListType(Type):
 
         converted_list = []
         for i, item in enumerate(value):
-            converted_item = self._item_type.convert(item, f"{field_path}[{i}]")
+            converted_item = self._item_type.convert(item, f"{field_path}[{i}]", strict)
             converted_list.append(converted_item)
         return converted_list
 
@@ -271,7 +295,7 @@ class TupleType(Type):
             result.update(item_type.type_alias_sources(visited))
         return result
     
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
         if value is None:
             return None
 
@@ -283,7 +307,7 @@ class TupleType(Type):
 
         converted_list = []
         for i, item_type in enumerate(self._item_types):
-            converted_item = item_type.convert(value[i], f"{field_path}[{i}]")
+            converted_item = item_type.convert(value[i], f"{field_path}[{i}]", strict)
             converted_list.append(converted_item)
         return tuple(converted_list)
 
@@ -354,7 +378,7 @@ class DictType(Type):
         result.update(self._value_type.type_alias_sources(visited))
         return result
     
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
         if value is None:
             return None
 
@@ -365,7 +389,7 @@ class DictType(Type):
         for k, v in value.items():
             if not isinstance(k, str):
                 raise ValueConversionError(f"{field_path} expected to have string keys, but got key of type {type(k).__name__}")
-            converted_value = self._value_type.convert(v, f"{field_path}.{k}")
+            converted_value = self._value_type.convert(v, f"{field_path}.{k}", strict)
             converted_dict[k] = converted_value
         return converted_dict
 
@@ -505,7 +529,33 @@ class DataclassType(Type):
             result.update(field_type.type_alias_sources(visited))
         return result
     
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict):
+        if strict:
+            return self.convert_strict(value, field_path)
+        
+        if value is None:
+            return None
+    
+        if not isinstance(value, Dict):
+            if type(value) in (int, float, str, bool) and len(self._field_types) == 1:
+                # sometimes llm may return a primitive value directly for a dataclass with a single field
+                logger.warning(f"{field_path} expected to be a dict, but got a primitive value: {value}, trying to convert it to the only field of the dataclass: {self}")
+                only_field_name = list(self._field_types.keys())[0]
+                value = {only_field_name: value}
+            else:
+                raise ValueConversionError(f"{field_path} expected to be a dict")
+        
+        field_values = {}
+        for field_name, field_type in self._field_types.items():
+            if field_name in value:
+                field_value = field_type.convert(value[field_name], f"{field_path}.{field_name}", strict)
+                field_values[field_name] = field_value
+            else:
+                field_values[field_name] = None
+
+        return self._dataclass_cls(**field_values)
+    
+    def convert_strict(self, value, field_path):
         if value is None:
             return None
     
@@ -515,10 +565,10 @@ class DataclassType(Type):
         field_values = {}
         for field_name, field_type in self._field_types.items():
             if field_name in value:
-                field_value = field_type.convert(value[field_name], f"{field_path}.{field_name}")
+                field_value = field_type.convert(value[field_name], f"{field_path}.{field_name}", strict=True)
                 field_values[field_name] = field_value
             else:
-                field_values[field_name] = None
+                raise ValueConversionError(f"{field_path} expected to have field {field_name}, but it's missing")
 
         return self._dataclass_cls(**field_values)
 
@@ -593,34 +643,70 @@ class UnionType(Type):
             result.update(type.type_alias_sources(visited))
         return result
     
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
+        if strict:
+            return self.convert_strict(value, field_path)
+        
         if value is None:
             return None
 
         if not isinstance(value, Dict):
-            raise ValueConversionError(f"{field_path} expected to be a dict with __type_index, __type_name and __value")
+            raise ValueConversionError(f"{field_path} expected to be a dict with __type_name and __value")
 
-        __type_index = value.get("__type_index")
         __type_name = value.get("__type_name")
         __value = value.get("__value")
 
-        if __type_index is None or __type_name is None or __value is None:
-            raise ValueConversionError(f"{field_path} expected to have __type_index, __type_name and __value")
+        if __type_name is None or __value is None:
+            # try all the types to convert the value, if only one type can convert it, return the converted value
+            try_results = []
+            for t in self._types:
+                try:
+                    converted_value = t.convert(value, f"{field_path}.__value", strict=True)
+                    try_results.append((t, converted_value))
+                except ValueConversionError:
+                    try_results.append((t, None))
+                    continue
+            
+            successful_conversions = [res for res in try_results if res[1] is not None]
+            if len(successful_conversions) == 1:
+                logger.warning(f"{field_path} expected to have __type_name and __value, but got value: {value}, successfully converted it to {successful_conversions[0][0]}")
+                return successful_conversions[0][1]
+            raise ValueConversionError(f"{field_path} expected to have __type_name and __value")
 
-        # check type index matches type name
-        # if not match, use type name to find type
         actual_type = None
-        if 0 <= __type_index < len(self._types):
-            actual_type = self._types[__type_index]
-            if repr(actual_type) != __type_name:
-                for t in self._types:
-                    if repr(t) == __type_name:
-                        actual_type = t
-                        break
-        if not actual_type:
-            raise ValueConversionError(f"{field_path} has invalid __type_index or __type_name")
+        for t in self._types:
+            if repr(t) == __type_name:
+                actual_type = t
+                break
 
-        return actual_type.convert(__value, f"{field_path}.__value")
+        if not actual_type:
+            raise ValueConversionError(f"{field_path} has invalid __type_name")
+
+        return actual_type.convert(__value, f"{field_path}.__value", strict)
+    
+    def convert_strict(self, value, field_path: str):
+        if value is None:
+            return None
+
+        if not isinstance(value, Dict):
+            raise ValueConversionError(f"{field_path} expected to be a dict with __type_name and __value")
+
+        __type_name = value.get("__type_name")
+        __value = value.get("__value")
+
+        if __type_name is None or __value is None:
+            raise ValueConversionError(f"{field_path} expected to have __type_name and __value")
+
+        actual_type = None
+        for t in self._types:
+            if repr(t) == __type_name:
+                actual_type = t
+                break
+
+        if not actual_type:
+            raise ValueConversionError(f"{field_path} has invalid __type_name")
+
+        return actual_type.convert(__value, f"{field_path}.__value", strict=True)
 
     def __repr__(self):
         type_strs = [repr(t) for t in self._types]
@@ -645,7 +731,7 @@ class AnyType(Type):
     def __init__(self, parent_type):
         Type.__init__(self, parent_type)
 
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
         return value
     
     def __repr__(self):
@@ -677,7 +763,7 @@ class LiteralType(Type):
         Type.__init__(self, parent_type)
         self._values = values
 
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
         if value is None:
             return None
 
@@ -784,8 +870,8 @@ class AliasType(Type):
         result.update(self._original_type.type_alias_sources(visited))
         return result
 
-    def convert(self, value, field_path: str):
-        return self._original_type.convert(value, field_path)
+    def convert(self, value, field_path: str, strict=False):
+        return self._original_type.convert(value, field_path, strict)
 
     def __repr__(self):
         return self._name
@@ -837,11 +923,11 @@ class OptionalType(Type):
         visited.add(self)
         return self._item_type.type_alias_sources(visited)
 
-    def convert(self, value, field_path: str):
+    def convert(self, value, field_path: str, strict=False):
         if value is None:
             return None
         
-        return self._item_type.convert(value, field_path)
+        return self._item_type.convert(value, field_path, strict)
 
     def __repr__(self):
         return f"Optional[{self._item_type}]"
