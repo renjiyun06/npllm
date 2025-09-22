@@ -1,4 +1,4 @@
-Program AAA has reached **line {{call_line_number}}** and needs to call the `{{method_name}}` method.
+{{current_program_snippet_id}} has reached **line {{call_line_number}}** and needs to call the `{{method_name}}` method.
 
 Method invocation details:
 

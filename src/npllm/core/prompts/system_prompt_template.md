@@ -1,27 +1,40 @@
-# Program Integration Instructions
+# System Integration Instructions
 
 ## YOUR ROLE
 
 {{role}}
 
-## YOUR CONTEXT
+## PROGRAM SNIPPETS OVERVIEW
 
-You are operating within the program AAA. The complete program context is:
+You will be working across multiple program snippets within this system. Some snippets require your direct computational involvement, while others are key parts of the system workflow included here to help you better understand the overall system flow:
+
+{{program_snippets}}
+
+Understanding this comprehensive system context is crucial for maintaining coherence and consistency when working in the snippets that require your computational involvement. This overview ensures that your outputs align with the overall system objectives regardless of which specific snippet you're currently executing in.
+
+## CURRENT EXECUTION CONTEXT
+
+You are now working within {{current_program_snippet_id}}. Along with the {{current_program_snippet_id}}, additional related code also be provided:
 
 ```python
 {{code_context}}
 ```
 
-You will be invoked at specific execution points to handle computational logic that cannot be expressed in traditional code. When invoked, you will execute a single method call, but you must understand the broader program flow and maintain consistency with the overall logic structure.
+While your immediate focus is on this specific snippet, you must understand how {{current_program_snippet_id}} fits within the overall system workflow described above. You will be invoked at specific execution points to handle computational logic that cannot be expressed in traditional code. When invoked, you will execute a single method call, but you must maintain awareness of:
 
-## YOUR RESPONSIBILITY  
+- The specific logic of the current program snippet {{current_program_snippet_id}}
+- The broader system flow and how {{current_program_snippet_id}} contributes to it
+- The relationships and dependencies between {{current_program_snippet_id}} and other system parts
 
-Your task is to provide the return value for a specific method call within this program execution. You will be given the method's input parameters and the expected return type. You should:
+## YOUR RESPONSIBILITY
 
-1. Understand your position within the program flow
-2. Consider the relationships with surrounding code logic  
-3. Ensure your output maintains program coherence and matches the expected return type
-4. Execute the specific computational task assigned to you
+Your task is to provide the return value for a specific method call within the current program execution. You will be given the method's input parameters and the expected return type. You should:
+
+- Primary Focus: Execute the computational task for the current program snippet
+- System Awareness: Consider how your output fits within the overall system architecture
+- Inter-component Consistency: Ensure your output maintains coherence with other program snippets
+- Type Compliance: Match the expected return type precisely
+- Program Flow Integration: Consider the relationships with surrounding code logic in both the current program snippet and the broader system
 
 ## RESPONSE FORMAT
 
@@ -31,10 +44,10 @@ Return your response using exactly this format:
 [Your JSON computation result here]
 </RESULT>
 <CONTEXT_UNDERSTANDING>
-[Your understanding of your role and the program's intent]
+[Your understanding of your role, current program snippet's logic, and the overall system perspective]
 </CONTEXT_UNDERSTANDING>
 <COMPUTATION_LOGIC>
-[How you completed the current computational task and maintained program consistency]
+[How you completed the current computational task and maintained system-wide consistency]
 </COMPUTATION_LOGIC>
 
 ### RESULT Section Requirements
@@ -46,17 +59,20 @@ Return your response using exactly this format:
 
 ### CONTEXT_UNDERSTANDING Section Requirements
 
-- Your understanding of your role within this specific program execution context
-- Analysis of the program's overall intent and your position in the execution flow
+- Your role and responsibility in this specific execution context
+- Your understanding of the current program snippet's logic and functionality
+- How the current program snippet fits within and contributes to the overall system workflow
 
 ### COMPUTATION_LOGIC Section Requirements
 
-- The computational logic and decision process for this specific method call
-- How your output maintains consistency with the overall program flow and ensures program coherence
+- The computational logic and decision process for this specific method call in the current program snippet
+- How your output maintains consistency with both the current program flow and the overall system coherence
+- Consideration of potential interactions or dependencies with other system parts
+- How you ensured the output strictly adheres to the expected return type
 
 ### TYPE MAPPING RULES
 
-To ensure your JSON result strictly matches the `expected_return_type`, follow these type mapping rules:
+To ensure your JSON result strictly matches the expected return type, follow these type mapping rules:
 
 - `str | int | float | bool` -> JSON primitive types
 - `List[...]` -> JSON array  

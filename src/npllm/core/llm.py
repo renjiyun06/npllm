@@ -1,7 +1,7 @@
 import inspect
 import uuid
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Type, Dict, Optional, Tuple
 from types import FrameType
 import asyncio
 import sys
@@ -38,6 +38,30 @@ class LLM:
 
     There is no prompt at all, all the context is from the code itself, including the comments.
     """
+
+    _next_program_snippet_id = 0
+    # all the funcs that have been inspected
+    _inspected_funcs: Dict[Type, Dict[Callable, Tuple[str, str]]] = {}
+
+    @classmethod
+    def self_inspect(cls, agent_cls: Type) -> Callable:
+        """
+        This decorator is used to enable the agent to inspect the whole system's code,
+        especially self inspect the code it is in, so that it can understand the context and intent of the code better
+        """
+        def _self_inspect(func: Callable) -> Callable:
+            if agent_cls not in cls._inspected_funcs:
+                cls._inspected_funcs[agent_cls] = {}
+            
+            program_snippet_id = f"PSI-{cls._next_program_snippet_id:04d}"
+            cls._next_program_snippet_id += 1
+            # extract the source code of the func
+            source = remove_indentation(inspect.getsource(func))
+            cls._inspected_funcs[agent_cls][func] = (program_snippet_id, source)
+            return func
+
+        return _self_inspect
+
     def __init__(self, role=None, model="openrouter/google/gemini-2.5-flash", **kwargs):
         self.role: str = role
         if not self.role and self.__class__.__name__ != "LLM":
@@ -45,15 +69,73 @@ class LLM:
         self.role = self.role.strip() if self.role and self.role.strip() else "You are a helpful assistant"
         self.model: str = model
         self._llm_kwargs = kwargs
+        self._inspected_funcs: Dict[Callable, (str, str)] = {}
+        self._program_snippets: str = None
+
+        self._self_inspect()
+
+    def _self_inspect(self):
+        """
+        Give the agent a chance to inspect the code it is in or other critical system code
+        """
+        inspected_funcs = LLM._inspected_funcs.get(self.__class__, {})
+        if not inspected_funcs:
+            return
+        
+        self._inspected_funcs = LLM._inspected_funcs[self.__class__]
+        
+        # beautify the program snippets
+        program_snippets = []
+        for program_snippet_id, source in self._inspected_funcs.values():
+            program_snippets.append(f"{program_snippet_id}:")
+            program_snippets.append("```python")
+            program_snippets.extend(source.splitlines())
+            program_snippets.append("```")
+            program_snippets.append("")
+
+        # remove the last empty line
+        program_snippets = program_snippets[:-1]
+        self._program_snippets = "\n".join(program_snippets)
 
     def _get_caller_frame_outside_llm(self) -> FrameType:
         # get the caller frame outside the LLM class
         caller_frame = inspect.currentframe()
         while caller_frame:
-            if caller_frame.f_code.co_filename != __file__:
+            # only the outside frame or __init__ frame is valid
+            if caller_frame.f_code.co_filename != __file__ or caller_frame.f_code.co_name == "_self_inspect":
                 return caller_frame
             caller_frame = caller_frame.f_back
         raise RuntimeError("Cannot find caller frame outside LLM class")
+    
+    def _get_caller_function(self, caller_frame: FrameType) -> Optional[Callable]:
+        func_name = caller_frame.f_code.co_name
+        caller_func = None
+        if "self" in caller_frame.f_locals:
+            # the caller is a method of a class
+            self_obj = caller_frame.f_locals["self"]
+            bound_method = getattr(self_obj, func_name, None)
+            if bound_method:
+                caller_func = bound_method.__func__
+        else:
+            # the caller is a function
+            module_name = caller_frame.f_globals.get('__name__')
+            module = sys.modules[module_name]
+            caller_func = getattr(module, func_name, None)
+        
+        return caller_func
+    
+    def _get_current_program_snippet_id(self, caller_frame: FrameType) -> Optional[str]:
+        """
+        Get the current program snippet's id which the llm method is called in
+        """
+        caller_func = self._get_caller_function(caller_frame)
+        if not caller_func:
+            return None
+        
+        if caller_func in self._inspected_funcs:
+            return self._inspected_funcs[caller_func][0]
+        
+        return None
 
     def __getattr__(self, method_name: str) -> Callable:
         async def llm_method_handler_async(*args, **kwargs) -> Any:
@@ -61,6 +143,11 @@ class LLM:
             logger.info(f"LLM method {method_name} called with call id {call_id}")
 
             caller_frame: FrameType = self._get_caller_frame_outside_llm()
+
+            current_program_snippet_id = self._get_current_program_snippet_id(caller_frame)
+            if not current_program_snippet_id:
+                raise RuntimeError("LLM method must be called in a function/method inspected by itself")
+
             absolute_call_line_number = caller_frame.f_lineno
             source = None
             if is_in_notebook(caller_frame) and caller_frame.f_code.co_name == "<module>":
@@ -108,6 +195,8 @@ class LLM:
                 code_context=add_line_number(code_context),
                 call_line_number=call_line_number,
                 model=self.model,
+                program_snippets=self._program_snippets,
+                current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
             )
             return await call_llm_async(llm_call_info)
@@ -117,6 +206,11 @@ class LLM:
             logger.info(f"LLM method {method_name} called with call id {call_id}")
 
             caller_frame: FrameType = self._get_caller_frame_outside_llm()
+
+            current_program_snippet_id = self._get_current_program_snippet_id(caller_frame)
+            if not current_program_snippet_id:
+                raise RuntimeError("LLM method must be called in a function/method inspected by itself")
+
             absolute_call_line_number = caller_frame.f_lineno
             source = None
             if is_in_notebook(caller_frame) and caller_frame.f_code.co_name == "<module>":
@@ -188,6 +282,8 @@ class LLM:
                 code_context=add_line_number(code_context),
                 call_line_number=call_line_number,
                 model=self.model,
+                program_snippets=self._program_snippets,
+                current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
             )
             return call_llm_sync(llm_call_info)

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import json
 import json_repair
 from importlib import resources
+from dataclasses import asdict
 
 from npllm.core.type import Type
 
@@ -15,10 +16,10 @@ load_dotenv()
 
 prompts = resources.files('npllm.core.prompts')
 with open(prompts / "system_prompt_template.md", "r") as f:
-    system_prompt_template = f.read()
+    system_prompt_template: str = f.read()
 
 with open(prompts / "user_prompt_template.md", "r") as f:
-    user_prompt_template = f.read()
+    user_prompt_template: str = f.read()
 
 @dataclass
 class LLMCallInfo:
@@ -31,17 +32,22 @@ class LLMCallInfo:
     kwargs: Dict[Any, Any]
     expected_return_type: Type
     model: str
+    current_program_snippet_id: str
+    program_snippets: str
     llm_kwargs: Dict[str, Any]
 
 async def call_llm_async(llm_call_info: LLMCallInfo) -> Any:
     logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model} with args {llm_call_info.llm_kwargs}")
     system_prompt = _populate_prompt_template(system_prompt_template, {
         "{{role}}": llm_call_info.role,
+        "{{program_snippets}}": llm_call_info.program_snippets,
+        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
         "{{code_context}}": llm_call_info.code_context
     })
     user_prompt = _populate_prompt_template(user_prompt_template, {
-        "{{call_line_number}}": str(llm_call_info.call_line_number),
+        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
         "{{method_name}}": llm_call_info.method_name,
+        "{{call_line_number}}": str(llm_call_info.call_line_number),
         "{{args}}": repr(llm_call_info.args),
         "{{kwargs}}": repr(llm_call_info.kwargs),
         "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
@@ -111,11 +117,14 @@ def call_llm_sync(llm_call_info: LLMCallInfo) -> Any:
     logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model} with args {llm_call_info.llm_kwargs}")
     system_prompt = _populate_prompt_template(system_prompt_template, {
         "{{role}}": llm_call_info.role,
+        "{{program_snippets}}": llm_call_info.program_snippets,
+        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
         "{{code_context}}": llm_call_info.code_context
     })
     user_prompt = _populate_prompt_template(user_prompt_template, {
-        "{{call_line_number}}": str(llm_call_info.call_line_number),
+        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
         "{{method_name}}": llm_call_info.method_name,
+        "{{call_line_number}}": str(llm_call_info.call_line_number),
         "{{args}}": repr(llm_call_info.args),
         "{{kwargs}}": repr(llm_call_info.kwargs),
         "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
