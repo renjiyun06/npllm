@@ -18,8 +18,14 @@ prompts = resources.files('npllm.core.prompts')
 with open(prompts / "system_prompt_template.md", "r") as f:
     system_prompt_template: str = f.read()
 
+with open(prompts / "system_prompt_template_no_inspect.md", "r") as f:
+    system_prompt_template_no_inspect: str = f.read()
+
 with open(prompts / "user_prompt_template.md", "r") as f:
     user_prompt_template: str = f.read()
+
+with open(prompts / "user_prompt_template_no_inspect.md", "r") as f:
+    user_prompt_template_no_inspect: str = f.read()
 
 @dataclass
 class LLMCallInfo:
@@ -35,23 +41,13 @@ class LLMCallInfo:
     current_program_snippet_id: str
     program_snippets: str
     llm_kwargs: Dict[str, Any]
+    inspected_mode: bool
+
 
 async def call_llm_async(llm_call_info: LLMCallInfo) -> Any:
     logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model} with args {llm_call_info.llm_kwargs}")
-    system_prompt = _populate_prompt_template(system_prompt_template, {
-        "{{role}}": llm_call_info.role,
-        "{{program_snippets}}": llm_call_info.program_snippets,
-        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
-        "{{code_context}}": llm_call_info.code_context
-    })
-    user_prompt = _populate_prompt_template(user_prompt_template, {
-        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
-        "{{method_name}}": llm_call_info.method_name,
-        "{{call_line_number}}": str(llm_call_info.call_line_number),
-        "{{args}}": repr(llm_call_info.args),
-        "{{kwargs}}": repr(llm_call_info.kwargs),
-        "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
-    })
+    
+    system_prompt, user_prompt = _get_system_and_user_prompt(llm_call_info)
 
     logger.debug(f"""System Prompt for {llm_call_info.call_id}: \n\n{system_prompt}\n""")
     logger.debug(f"""User Prompt for {llm_call_info.call_id}: \n\n{user_prompt}\n""")
@@ -115,20 +111,8 @@ async def call_llm_async(llm_call_info: LLMCallInfo) -> Any:
 
 def call_llm_sync(llm_call_info: LLMCallInfo) -> Any:
     logger.info(f"The model used for LLM call {llm_call_info.call_id} is {llm_call_info.model} with args {llm_call_info.llm_kwargs}")
-    system_prompt = _populate_prompt_template(system_prompt_template, {
-        "{{role}}": llm_call_info.role,
-        "{{program_snippets}}": llm_call_info.program_snippets,
-        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
-        "{{code_context}}": llm_call_info.code_context
-    })
-    user_prompt = _populate_prompt_template(user_prompt_template, {
-        "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
-        "{{method_name}}": llm_call_info.method_name,
-        "{{call_line_number}}": str(llm_call_info.call_line_number),
-        "{{args}}": repr(llm_call_info.args),
-        "{{kwargs}}": repr(llm_call_info.kwargs),
-        "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
-    })
+    
+    system_prompt, user_prompt = _get_system_and_user_prompt(llm_call_info)
 
     logger.debug(f"""System Prompt for {llm_call_info.call_id}: \n\n{system_prompt}\n""")
     logger.debug(f"""User Prompt for {llm_call_info.call_id}: \n\n{user_prompt}\n""")
@@ -195,3 +179,46 @@ def _populate_prompt_template(template, replacements):
     for placeholder, value in replacements.items():
         prompt = prompt.replace(placeholder, value)
     return prompt
+
+def _get_system_and_user_prompt(llm_call_info: LLMCallInfo) -> tuple[str, str]:
+    if llm_call_info.inspected_mode:
+        system_prompt = _populate_prompt_template(
+            system_prompt_template,
+            {
+                "{{role}}": llm_call_info.role,
+                "{{program_snippets}}": llm_call_info.program_snippets,
+                "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
+                "{{code_context}}": llm_call_info.code_context
+            }
+        )
+        user_prompt = _populate_prompt_template(
+            user_prompt_template,
+            {
+                "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
+                "{{method_name}}": llm_call_info.method_name,
+                "{{call_line_number}}": str(llm_call_info.call_line_number),
+                "{{args}}": repr(llm_call_info.args),
+                "{{kwargs}}": repr(llm_call_info.kwargs),
+                "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
+            }
+        )
+    else:
+        system_prompt = _populate_prompt_template(
+            system_prompt_template_no_inspect,
+            {
+                "{{role}}": llm_call_info.role,
+                "{{code_context}}": llm_call_info.code_context
+            }
+        )
+        user_prompt = _populate_prompt_template(
+            user_prompt_template_no_inspect,
+            {
+                "{{method_name}}": llm_call_info.method_name,
+                "{{call_line_number}}": str(llm_call_info.call_line_number),
+                "{{args}}": repr(llm_call_info.args),
+                "{{kwargs}}": repr(llm_call_info.kwargs),
+                "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
+            }
+        )
+
+    return system_prompt, user_prompt

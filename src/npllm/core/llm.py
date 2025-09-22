@@ -69,6 +69,8 @@ class LLM:
         self.role = self.role.strip() if self.role and self.role.strip() else "You are a helpful assistant"
         self.model: str = model
         self._llm_kwargs = kwargs
+
+        self._inspected_mode: bool = False
         self._inspected_funcs: Dict[Callable, (str, str)] = {}
         self._program_snippets: str = None
 
@@ -82,6 +84,7 @@ class LLM:
         if not inspected_funcs:
             return
         
+        self._inspected_mode = True
         self._inspected_funcs = LLM._inspected_funcs[self.__class__]
         
         # beautify the program snippets
@@ -145,7 +148,7 @@ class LLM:
             caller_frame: FrameType = self._get_caller_frame_outside_llm()
 
             current_program_snippet_id = self._get_current_program_snippet_id(caller_frame)
-            if not current_program_snippet_id:
+            if self._inspected_mode and not current_program_snippet_id:
                 raise RuntimeError("LLM method must be called in a function/method inspected by itself")
 
             absolute_call_line_number = caller_frame.f_lineno
@@ -198,6 +201,7 @@ class LLM:
                 program_snippets=self._program_snippets,
                 current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
+                inspected_mode=self._inspected_mode,
             )
             return await call_llm_async(llm_call_info)
         
@@ -208,7 +212,7 @@ class LLM:
             caller_frame: FrameType = self._get_caller_frame_outside_llm()
 
             current_program_snippet_id = self._get_current_program_snippet_id(caller_frame)
-            if not current_program_snippet_id:
+            if self._inspected_mode and not current_program_snippet_id:
                 raise RuntimeError("LLM method must be called in a function/method inspected by itself")
 
             absolute_call_line_number = caller_frame.f_lineno
@@ -241,7 +245,6 @@ class LLM:
                     break
                 relative_call_line_number = absolute_call_line_number - i - 1
                 source = remove_indentation("\n".join(module_source.splitlines()[i + 1: absolute_call_line_number]))
-                print(source)
             else:
                 source = remove_indentation(inspect.getsource(caller_frame.f_code))
                 relative_call_line_number = caller_frame.f_lineno - caller_frame.f_code.co_firstlineno + 1
@@ -285,6 +288,7 @@ class LLM:
                 program_snippets=self._program_snippets,
                 current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
+                inspected_mode=self._inspected_mode,
             )
             return call_llm_sync(llm_call_info)
         
