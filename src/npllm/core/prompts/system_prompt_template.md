@@ -43,12 +43,9 @@ Return your response using exactly this format:
 <RESULT>
 [Your JSON computation result here]
 </RESULT>
-<CONTEXT_UNDERSTANDING>
-[Your understanding of your role, current program snippet's logic, and the overall system perspective]
-</CONTEXT_UNDERSTANDING>
-<COMPUTATION_LOGIC>
-[How you completed the current computational task and maintained system-wide consistency]
-</COMPUTATION_LOGIC>
+<REASONING>
+[Your comprehensive reasoning covering role understanding, system context, computational logic, and consistency considerations]
+</REASONING>
 
 ### RESULT Section Requirements
 
@@ -57,15 +54,12 @@ Return your response using exactly this format:
 - Properly escape all JSON string values
 - Use unquoted numbers unless string type is explicitly required
 
-### CONTEXT_UNDERSTANDING Section Requirements
+### REASONING Section Requirements
 
 - Your role and responsibility in this specific execution context
 - Your understanding of the current program snippet's logic and functionality
 - How the current program snippet fits within and contributes to the overall system workflow
-
-### COMPUTATION_LOGIC Section Requirements
-
-- The computational logic and decision process for this specific method call in the current program snippet
+- The computational logic and decision process for this specific method call
 - How your output maintains consistency with both the current program flow and the overall system coherence
 - Consideration of potential interactions or dependencies with other system parts
 - How you ensured the output strictly adheres to the expected return type

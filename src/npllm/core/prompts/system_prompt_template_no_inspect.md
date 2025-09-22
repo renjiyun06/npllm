@@ -30,12 +30,9 @@ Return your response using exactly this format:
 <RESULT>
 [Your JSON computation result here]
 </RESULT>
-<CONTEXT_UNDERSTANDING>
-[Your understanding of your role and the program's intent]
-</CONTEXT_UNDERSTANDING>
-<COMPUTATION_LOGIC>
-[How you completed the current computational task and maintained program consistency]
-</COMPUTATION_LOGIC>
+<REASONING>
+[Your comprehensive reasoning covering role understanding, computational logic, and consistency considerations]
+</REASONING>
 
 ### RESULT Section Requirements
 
@@ -44,15 +41,13 @@ Return your response using exactly this format:
 - Properly escape all JSON string values
 - Use unquoted numbers unless string type is explicitly required
 
-### CONTEXT_UNDERSTANDING Section Requirements
+### REASONING Section Requirements
 
 - Your understanding of your role within this specific program execution context
 - Analysis of the program's overall intent and your position in the execution flow
-
-### COMPUTATION_LOGIC Section Requirements
-
 - The computational logic and decision process for this specific method call
 - How your output maintains consistency with the overall program flow and ensures program coherence
+- How you ensured the output strictly adheres to the expected return type
 
 ### TYPE MAPPING RULES
 

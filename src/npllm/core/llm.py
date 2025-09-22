@@ -10,7 +10,7 @@ from npllm.utils.notebook_util import is_in_notebook, last_cell_source
 from npllm.utils.source_util import remove_indentation, add_line_number
 from npllm.core.type import Type
 from npllm.core.call_site import CallSite
-from npllm.core.call_llm import LLMCallInfo, call_llm_async, call_llm_sync
+from npllm.core.call_llm import LLMCallInfo, LLMCallResult, call_llm_async, call_llm_sync
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,10 @@ class LLM:
         self._program_snippets: str = None
 
         self._self_inspect()
+
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        self._total_completion_cost = 0.0
 
     def _self_inspect(self):
         """
@@ -203,7 +207,12 @@ class LLM:
                 llm_kwargs=self._llm_kwargs,
                 inspected_mode=self._inspected_mode,
             )
-            return await call_llm_async(llm_call_info)
+            llm_call_result = await call_llm_async(llm_call_info)
+            logger.info(f"LLM call {llm_call_result.call_id} used {llm_call_result.prompt_tokens} input tokens, {llm_call_result.completion_tokens} output tokens, cost ${llm_call_result.completion_cost:.6f}")
+            self._total_input_tokens += llm_call_result.prompt_tokens
+            self._total_output_tokens += llm_call_result.completion_tokens
+            self._total_completion_cost += llm_call_result.completion_cost
+            return llm_call_result.result
         
         def llm_method_handler_sync(*args, **kwargs) -> Any:
             call_id = str(uuid.uuid4())
@@ -290,7 +299,12 @@ class LLM:
                 llm_kwargs=self._llm_kwargs,
                 inspected_mode=self._inspected_mode,
             )
-            return call_llm_sync(llm_call_info)
+            llm_call_result = call_llm_sync(llm_call_info)
+            logger.info(f"LLM call {llm_call_result.call_id} used {llm_call_result.prompt_tokens} input tokens, {llm_call_result.completion_tokens} output tokens, cost ${llm_call_result.completion_cost:.6f}")
+            self._total_input_tokens += llm_call_result.prompt_tokens
+            self._total_output_tokens += llm_call_result.completion_tokens
+            self._total_completion_cost += llm_call_result.completion_cost
+            return llm_call_result.result
         
         class DualCallable:
             def __init__(self, async_func, sync_func):
