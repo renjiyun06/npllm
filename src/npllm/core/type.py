@@ -23,13 +23,16 @@ class Type(ABC):
         Create a Type instance from an AST annotation node
 
         Example:
-        x: int -> BasicType("int")
-        y: List[int] -> ListType(BasicType("int"))
+        x: int -> IntType("int")
+        y: List[int] -> ListType(IntType("int"))
         """
         result = None
         if isinstance(annotation, ast.Name) or isinstance(annotation, ast.Constant):
             result = (
-                BasicType.from_annotation(annotation, call_site, parent_type) or 
+                StrType.from_annotation(annotation, call_site, parent_type) or
+                IntType.from_annotation(annotation, call_site, parent_type) or
+                FloatType.from_annotation(annotation, call_site, parent_type) or
+                BoolType.from_annotation(annotation, call_site, parent_type) or
                 AnyType.from_annotation(annotation, call_site, parent_type) or 
                 DataclassType.from_annotation(annotation, call_site, parent_type) or 
                 AliasType.from_annotation(annotation, call_site, parent_type)
@@ -58,47 +61,9 @@ class Type(ABC):
         
         return result
     
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> 'Type':
-        if type(py_type) is typing.ForwardRef:
-            logger.debug(f"Type.from_python_type: resolving ForwardRef {py_type}...")
-            ref = py_type.__forward_arg__
-            # only find the forward ref in the module of the call site for simplicity
-            module = call_site.get_module()
-            if module and hasattr(module, ref):
-                py_type = getattr(module, ref)
-                logger.debug(f"Type.from_python_type: resolved ForwardRef {ref} to {py_type}")
-            else:
-                logger.warning(f"Type.from_python_type: cannot resolve ForwardRef {py_type}")
-                return None
-
-        return (
-            BasicType.from_python_type(py_type, call_site, parent_type) or
-            ListType.from_python_type(py_type, call_site, parent_type) or
-            TupleType.from_python_type(py_type, call_site, parent_type) or
-            # place OptionalType before UnionType to handle Optional[T] correctly
-            OptionalType.from_python_type(py_type, call_site, parent_type) or
-            AliasType.from_python_type(py_type, call_site, parent_type) or
-            DictType.from_python_type(py_type, call_site, parent_type) or
-            UnionType.from_python_type(py_type, call_site, parent_type) or
-            AnyType.from_python_type(py_type, call_site, parent_type) or
-            LiteralType.from_python_type(py_type, call_site, parent_type) or
-            DataclassType.from_python_type(py_type, call_site, parent_type) or
-            AliasType.from_python_type(py_type, call_site, parent_type) or None
-        )
-    
     def __init__(self, parent_type):
         self._parent_type = parent_type
     
-    @abstractmethod
-    def convert(self, value: Any, field_path: str=None):
-        """
-        Convert a JSON value to the target type value
-
-        If conversion fails, raise ValueConversionError with a descriptive message which is llm friendly
-        """
-        pass
-
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         return {}
 
@@ -109,71 +74,97 @@ class Type(ABC):
     def __repr__(self):
         pass
 
-class BasicType(Type):
+class StrType(Type):
     @classmethod
-    def from_annotation(cls, annotation: ast.Name | ast.Constant, call_site, parent_type) -> Optional['BasicType']:
-        if isinstance(annotation, ast.Name) and annotation.id in ('str', 'int', 'float', 'bool'):
-            return BasicType(parent_type, annotation.id)
-        if isinstance(annotation, ast.Constant) and annotation.value in ('str', 'int', 'float', 'bool'):
-            return BasicType(parent_type, annotation.value)
+    def from_annotation(cls, annotation: ast.Name | ast.Constant, call_site, parent_type) -> Optional['StrType']:
+        if isinstance(annotation, ast.Name) and annotation.id == 'str':
+            return StrType(parent_type)
+        if isinstance(annotation, ast.Constant) and annotation.value == 'str':
+            return StrType(parent_type)
         return None
     
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['BasicType']:
-        if py_type in (str, int, float, bool):
-            logger.debug(f"BasicType.from_python_type: {py_type}")
-            return BasicType(parent_type, py_type.__name__)
-        return None
-    
-    def __init__(self, parent_type, type: Literal["str", "int", "float", "bool"]):
+    def __init__(self, parent_type):
         Type.__init__(self, parent_type)
-        self._type = type
-
-    def convert(self, value, field_path, strict=False):
-        if strict:
-            return self.convert_strict(value, field_path)
-        
-        if value is None:
-            return None
-    
-        if self._type == "str":
-            return str(value)
-
-        if value == "":
-            return None
-
-        if self._type == "int":
-            return int(value)
-        elif self._type == "float":
-            return float(value)
-        elif self._type == "bool":
-            return bool(value)
-        
-        raise RuntimeError(f"Unknown basic type: {self._type}")
-    
-    def convert_strict(self, value, field_path):
-        if value is None:
-            return None
-        
-        if self._type == "str":
-            if not isinstance(value, str):
-                raise ValueConversionError(f"{field_path} expected to be str, but got {type(value).__name__}")
-            return value
-
-        if self._type in ("int", "float"):
-            if not isinstance(value, int) and not isinstance(value, float):
-                raise ValueConversionError(f"{field_path} expected to be int or float, but got {type(value).__name__}")
-            return value
-        
-        elif self._type == "bool":
-            if not isinstance(value, bool):
-                raise ValueConversionError(f"{field_path} expected to be bool, but got {type(value).__name__}")
-            return value
-        
-        raise RuntimeError(f"Unknown basic type: {self._type}")
 
     def __repr__(self):
-        return f"{self._type}"
+        return "str"
+
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "str"
+        return isinstance(other, StrType)
+
+class IntType(Type):
+    @classmethod
+    def from_annotation(cls, annotation: ast.Name | ast.Constant, call_site, parent_type) -> Optional['IntType']:
+        if isinstance(annotation, ast.Name) and annotation.id == 'int':
+            return IntType(parent_type)
+        if isinstance(annotation, ast.Constant) and annotation.value == 'int':
+            return IntType(parent_type)
+        return None
+    
+    def __init__(self, parent_type):
+        Type.__init__(self, parent_type)
+
+    def __repr__(self):
+        return "int"
+
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "int"
+        return isinstance(other, IntType)
+    
+class FloatType(Type):
+    @classmethod
+    def from_annotation(cls, annotation: ast.Name | ast.Constant, call_site, parent_type) -> Optional['FloatType']:
+        if isinstance(annotation, ast.Name) and annotation.id == 'float':
+            return FloatType(parent_type)
+        if isinstance(annotation, ast.Constant) and annotation.value == 'float':
+            return FloatType(parent_type)
+        return None
+    
+    def __init__(self, parent_type):
+        Type.__init__(self, parent_type)
+
+    def __repr__(self):
+        return "float"
+
+    def __hash__(self):
+        return super().__hash__()
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "float"
+        return isinstance(other, FloatType)
+    
+class BoolType(Type):
+    @classmethod
+    def from_annotation(cls, annotation: ast.Name | ast.Constant, call_site, parent_type) -> Optional['BoolType']:
+        if isinstance(annotation, ast.Name) and annotation.id == 'bool':
+            return BoolType(parent_type)
+        if isinstance(annotation, ast.Constant) and annotation.value == 'bool':
+            return BoolType(parent_type)
+        return None
+    
+    def __init__(self, parent_type):
+        Type.__init__(self, parent_type)
+
+    def __repr__(self):
+        return "bool"
+
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "bool"
+        return isinstance(other, BoolType)
     
 class ListType(Type):
     @classmethod
@@ -187,23 +178,13 @@ class ListType(Type):
             return list_type
         return None
     
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['ListType']:
-        list_type = ListType(parent_type, None)
-        origin = typing.get_origin(py_type)
-        args = typing.get_args(py_type)
-        if origin in (list, List) and len(args) == 1:
-            logger.debug(f"ListType.from_python_type: {py_type}...")
-            item_type = Type.from_python_type(args[0], call_site, list_type)
-            if item_type:
-                logger.debug(f"ListType.from_python_type: {py_type}")
-                list_type._item_type = item_type
-                return list_type
-        return None
-
     def __init__(self, parent_type, item_type: 'Type'):
         Type.__init__(self, parent_type)
         self._item_type = item_type
+
+    @property
+    def item_type(self):
+        return self._item_type
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -219,21 +200,20 @@ class ListType(Type):
         visited.add(self)
         return self._item_type.type_alias_sources(visited)
 
-    def convert(self, value, field_path: str, strict=False):
-        if value is None:
-            return None
-        
-        if not isinstance(value, List):
-            raise ValueConversionError(f"{field_path} expected to be a list")
-
-        converted_list = []
-        for i, item in enumerate(value):
-            converted_item = self._item_type.convert(item, f"{field_path}[{i}]", strict)
-            converted_list.append(converted_item)
-        return converted_list
-
     def __repr__(self):
         return f"List[{self._item_type}]"
+    
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "List"
+        
+        if not isinstance(other, ListType):
+            return False
+    
+        return self._item_type == other._item_type
     
 class TupleType(Type):
     @classmethod
@@ -250,30 +230,14 @@ class TupleType(Type):
         tuple_type._item_types = tuple(item_types)
         logger.debug(f"TupleType.from_annotation: {ast.dump(annotation)}")
         return tuple_type
-    
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['TupleType']:
-        origin = typing.get_origin(py_type)
-        args = typing.get_args(py_type)
-        if origin in (tuple, Tuple) and len(args) >= 1:
-            logger.debug(f"TupleType.from_python_type: {py_type}...")
-            tuple_type = TupleType(parent_type, None)
-            item_types = []
-            for arg in args:
-                item_type = Type.from_python_type(arg, call_site, tuple_type)
-                if item_type:
-                    item_types.append(item_type)
-                else:
-                    return None
-            tuple_type._item_types = tuple(item_types)
-            logger.debug(f"TupleType.from_python_type: {py_type}")
-            return tuple_type
-        
-        return None
 
     def __init__(self, parent_type, item_types: tuple['Type', ...]):
         Type.__init__(self, parent_type)
         self._item_types = item_types
+
+    @property
+    def item_types(self):
+        return self._item_types
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -294,29 +258,27 @@ class TupleType(Type):
         for item_type in self._item_types:
             result.update(item_type.type_alias_sources(visited))
         return result
-    
-    def convert(self, value, field_path: str, strict=False):
-        if value is None:
-            return None
-
-        if not isinstance(value, list):
-            raise ValueConversionError(f"{field_path} expected to be a list")
-
-        if len(self._item_types) != len(value):
-            raise ValueConversionError(f"{field_path} expected to have {len(self._item_types)} items, but got {len(value)} items")
-
-        converted_list = []
-        for i, item_type in enumerate(self._item_types):
-            converted_item = item_type.convert(value[i], f"{field_path}[{i}]", strict)
-            converted_list.append(converted_item)
-        return tuple(converted_list)
-
 
     def __repr__(self):
         items_repr = []
         for item in self._item_types:
             items_repr.append(repr(item))
         return f"Tuple[{', '.join(items_repr)}]"
+    
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "Tuple"
+        
+        if not isinstance(other, TupleType):
+            return False
+        
+        if len(self._item_types) != len(other._item_types):
+            return False
+        
+        return all(s == o for s, o in zip(self._item_types, other._item_types))
 
 class DictType(Type):
     @classmethod
@@ -326,7 +288,7 @@ class DictType(Type):
         key_type = Type.from_annotation(annotation.slice.elts[0], call_site, dict_type)
         value_type = Type.from_annotation(annotation.slice.elts[1], call_site, dict_type)
         if key_type and value_type:
-            if not isinstance(key_type, BasicType) or key_type._type != 'str':
+            if not isinstance(key_type, StrType):
                 raise RuntimeError("Only str key type is supported in Dict")
             dict_type._key_type = key_type
             dict_type._value_type = value_type
@@ -334,29 +296,18 @@ class DictType(Type):
             return dict_type
         return None
 
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['DictType']:
-        origin = typing.get_origin(py_type)
-        args = typing.get_args(py_type)
-        if origin in (dict, Dict) and len(args) == 2:
-            logger.debug(f"DictType.from_python_type: {py_type}...")
-            dict_type = DictType(parent_type, None, None)
-            key_type = Type.from_python_type(args[0], call_site, dict_type)
-            value_type = Type.from_python_type(args[1], call_site, dict_type)
-            if key_type and value_type:
-                if not isinstance(key_type, BasicType) or key_type._type != 'str':
-                    raise RuntimeError("Only str key type is supported in Dict")
-                
-                dict_type._key_type = key_type
-                dict_type._value_type = value_type
-                logger.debug(f"DictType.from_python_type: {py_type}")
-                return dict_type
-        return None
-
     def __init__(self, parent_type, key_type: 'Type', value_type: 'Type'):
         Type.__init__(self, parent_type)
         self._key_type = key_type
         self._value_type = value_type
+
+    @property
+    def key_type(self):
+        return self._key_type
+
+    @property
+    def value_type(self):
+        return self._value_type
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -377,24 +328,21 @@ class DictType(Type):
         result.update(self._key_type.type_alias_sources(visited))
         result.update(self._value_type.type_alias_sources(visited))
         return result
-    
-    def convert(self, value, field_path: str, strict=False):
-        if value is None:
-            return None
-
-        if not isinstance(value, Dict):
-            raise ValueConversionError(f"{field_path} expected to be a dict")
-
-        converted_dict = {}
-        for k, v in value.items():
-            if not isinstance(k, str):
-                raise ValueConversionError(f"{field_path} expected to have string keys, but got key of type {type(k).__name__}")
-            converted_value = self._value_type.convert(v, f"{field_path}.{k}", strict)
-            converted_dict[k] = converted_value
-        return converted_dict
 
     def __repr__(self):
         return f"Dict[{self._key_type}, {self._value_type}]"
+    
+    def __hash__(self):
+        return super().__hash__()
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "Dict"
+        
+        if not isinstance(other, DictType):
+            return False
+        
+        return self._key_type == other._key_type and self._value_type == other._value_type
 
 class DataclassType(Type):
     @classmethod
@@ -455,52 +403,19 @@ class DataclassType(Type):
 
         return None
 
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['DataclassType']:
-        if not py_type or not inspect.isclass(py_type) or not hasattr(py_type, '__dataclass_fields__'):
-            return None
-        
-        logger.debug(f"DataclassType.from_python_type: {py_type}...")
-        dataclass_cls = py_type
-
-        # find self-referencing dataclass in parent_type chain
-        if parent_type:
-            current = parent_type
-            while current:
-                if isinstance(current, DataclassType) and current._dataclass_cls == dataclass_cls:
-                    logger.debug(f"DataclassType.from_python_type: {py_type} is self-referencing")
-                    return current
-                current = current._parent_type
-                
-
-        field_types = {}
-        # this is to handle self-referencing dataclass, like:
-        # 
-        # @dataclass
-        # class Tree:
-        #   value: int
-        #   left: Optional['Tree']
-        #   right: Optional['Tree']
-        # 
-        # we create a DataclassType instance first, then fill in the field types
-        dataclass_type = DataclassType(parent_type, dataclass_cls, None, call_site)
-        logger.debug(f"DataclassType.from_python_type: early created DataclassType for {py_type} for self referencing")
-        for field in fields(dataclass_cls):
-            field_type = Type.from_python_type(field.type, call_site, parent_type=dataclass_type)
-            if not field_type:
-                return None
-            field_types[field.name] = field_type
-
-        dataclass_type._field_types = field_types
-        logger.debug(f"DataclassType.from_python_type: {py_type}")
-        return dataclass_type
-        
-
     def __init__(self, parent_type, dataclass_cls, field_types: Dict[str, 'Type'], call_site):
         Type.__init__(self, parent_type)
         self._dataclass_cls: typing.Type = dataclass_cls
         self._field_types = field_types
         self._call_site = call_site
+
+    @property
+    def dataclass_cls(self):
+        return self._dataclass_cls
+
+    @property
+    def field_types(self):
+        return self._field_types
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -528,52 +443,31 @@ class DataclassType(Type):
         for field_type in self._field_types.values():
             result.update(field_type.type_alias_sources(visited))
         return result
-    
-    def convert(self, value, field_path: str, strict):
-        if strict:
-            return self.convert_strict(value, field_path)
-        
-        if value is None:
-            return None
-    
-        if not isinstance(value, Dict):
-            if type(value) in (int, float, str, bool) and len(self._field_types) == 1:
-                # sometimes llm may return a primitive value directly for a dataclass with a single field
-                logger.warning(f"{field_path} expected to be a dict, but got a primitive value: {value}, trying to convert it to the only field of the dataclass: {self}")
-                only_field_name = list(self._field_types.keys())[0]
-                value = {only_field_name: value}
-            else:
-                raise ValueConversionError(f"{field_path} expected to be a dict")
-        
-        field_values = {}
-        for field_name, field_type in self._field_types.items():
-            if field_name in value:
-                field_value = field_type.convert(value[field_name], f"{field_path}.{field_name}", strict)
-                field_values[field_name] = field_value
-            else:
-                field_values[field_name] = None
-
-        return self._dataclass_cls(**field_values)
-    
-    def convert_strict(self, value, field_path):
-        if value is None:
-            return None
-    
-        if not isinstance(value, Dict):
-            raise ValueConversionError(f"{field_path} expected to be a dict")
-        
-        field_values = {}
-        for field_name, field_type in self._field_types.items():
-            if field_name in value:
-                field_value = field_type.convert(value[field_name], f"{field_path}.{field_name}", strict=True)
-                field_values[field_name] = field_value
-            else:
-                raise ValueConversionError(f"{field_path} expected to have field {field_name}, but it's missing")
-
-        return self._dataclass_cls(**field_values)
 
     def __repr__(self):
         return f"{self._dataclass_cls.__name__}"
+    
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "dataclass"
+
+        if not isinstance(other, DataclassType):
+            return False
+        
+        if self._dataclass_cls != other._dataclass_cls:
+            return False
+
+        if len(self._field_types) != len(other._field_types):
+            return False
+        
+        for key in self._field_types:
+            if key not in other._field_types or self._field_types[key] != other._field_types[key]:
+                return False
+
+        return True
 
 class UnionType(Type):
     @classmethod
@@ -599,29 +493,13 @@ class UnionType(Type):
         logger.debug(f"UnionType.from_annotation: {ast.dump(annotation)}")
         return union_type
     
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['UnionType']:
-        origin = typing.get_origin(py_type)
-        args = typing.get_args(py_type)
-        if origin in (typing.Union, types_UnionType, typing._UnionGenericAlias) and len(args) >= 1:
-            logger.debug(f"UnionType.from_python_type: {py_type}...")
-            union_type = UnionType(parent_type, None)
-            types = []
-            for arg in args:
-                arg_type = Type.from_python_type(arg, call_site, parent_type)
-                if arg_type:
-                    types.append(arg_type)
-                else:
-                    return None
-            
-            union_type._types = types
-            logger.debug(f"UnionType.from_python_type: {py_type}")
-            return union_type
-        return None
-        
     def __init__(self, parent_type, types: List['Type']):
         Type.__init__(self, parent_type)
         self._types = types
+
+    @property
+    def types(self):
+        return self._types
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -642,75 +520,25 @@ class UnionType(Type):
         for type in self._types:
             result.update(type.type_alias_sources(visited))
         return result
-    
-    def convert(self, value, field_path: str, strict=False):
-        if strict:
-            return self.convert_strict(value, field_path)
-        
-        if value is None:
-            return None
-
-        if not isinstance(value, Dict):
-            raise ValueConversionError(f"{field_path} expected to be a dict with __type_name and __value")
-
-        __type_name = value.get("__type_name")
-        __value = value.get("__value")
-
-        if __type_name is None or __value is None:
-            # try all the types to convert the value, if only one type can convert it, return the converted value
-            try_results = []
-            for t in self._types:
-                try:
-                    converted_value = t.convert(value, f"{field_path}.__value", strict=True)
-                    try_results.append((t, converted_value))
-                except ValueConversionError:
-                    try_results.append((t, None))
-                    continue
-            
-            successful_conversions = [res for res in try_results if res[1] is not None]
-            if len(successful_conversions) == 1:
-                logger.warning(f"{field_path} expected to have __type_name and __value, but got value: {value}, successfully converted it to {successful_conversions[0][0]}")
-                return successful_conversions[0][1]
-            raise ValueConversionError(f"{field_path} expected to have __type_name and __value")
-
-        actual_type = None
-        for t in self._types:
-            if repr(t) == __type_name:
-                actual_type = t
-                break
-
-        if not actual_type:
-            raise ValueConversionError(f"{field_path} has invalid __type_name")
-
-        return actual_type.convert(__value, f"{field_path}.__value", strict)
-    
-    def convert_strict(self, value, field_path: str):
-        if value is None:
-            return None
-
-        if not isinstance(value, Dict):
-            raise ValueConversionError(f"{field_path} expected to be a dict with __type_name and __value")
-
-        __type_name = value.get("__type_name")
-        __value = value.get("__value")
-
-        if __type_name is None or __value is None:
-            raise ValueConversionError(f"{field_path} expected to have __type_name and __value")
-
-        actual_type = None
-        for t in self._types:
-            if repr(t) == __type_name:
-                actual_type = t
-                break
-
-        if not actual_type:
-            raise ValueConversionError(f"{field_path} has invalid __type_name")
-
-        return actual_type.convert(__value, f"{field_path}.__value", strict=True)
 
     def __repr__(self):
         type_strs = [repr(t) for t in self._types]
         return f"Union[{', '.join(type_strs)}]"
+
+    def __hash__(self):
+        return super().__hash__()
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "Union"
+    
+        if not isinstance(other, UnionType):
+            return False
+        
+        if len(self._types) != len(other._types):
+            return False
+        
+        return all(s == o for s, o in zip(self._types, other._types))
 
 class AnyType(Type):
     @classmethod
@@ -721,22 +549,20 @@ class AnyType(Type):
             return AnyType(parent_type)
         return None
     
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['AnyType']:
-        if py_type is Any:
-            logger.debug(f"AnyType.from_python_type: {py_type}")
-            return AnyType(parent_type)
-        return None
-
     def __init__(self, parent_type):
         Type.__init__(self, parent_type)
-
-    def convert(self, value, field_path: str, strict=False):
-        return value
     
     def __repr__(self):
         return "Any"
     
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "Any"
+        return isinstance(other, AnyType)
+
 class LiteralType(Type):
     @classmethod
     def from_annotation(cls, annotation: ast.Subscript, call_site, parent_type) -> Optional['LiteralType']:
@@ -750,31 +576,32 @@ class LiteralType(Type):
             return LiteralType(parent_type, values)
         return None
     
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['LiteralType']:
-        origin = typing.get_origin(py_type)
-        args = typing.get_args(py_type)
-        if origin is Literal and all(isinstance(v, (str, int, float, bool)) for v in args):
-            logger.debug(f"LiteralType.from_python_type: {py_type}")
-            return LiteralType(parent_type, list(args))
-        return None
-    
     def __init__(self, parent_type, values: List[Union[str, int, float, bool]]):
         Type.__init__(self, parent_type)
         self._values = values
 
-    def convert(self, value, field_path: str, strict=False):
-        if value is None:
-            return None
-
-        if value not in self._values:
-            raise ValueConversionError(f"{field_path} expected to be one of {self._values}, but got {value}")
-
-        return value
+    @property
+    def values(self):
+        return self._values
 
     def __repr__(self):
         value_strs = [repr(v) for v in self._values]
         return f"Literal[{', '.join(value_strs)}]"
+
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "Literal"
+        
+        if not isinstance(other, LiteralType):
+            return False
+        
+        if len(self._values) != len(other._values):
+            return False
+        
+        return all(s == o for s, o in zip(self._values, other._values))
     
 class AliasType(Type):
     @classmethod
@@ -817,42 +644,15 @@ class AliasType(Type):
                         return alias_type
         return None
 
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['AliasType']:
-        if not isinstance(py_type, str):
-            return None
-        
-        alias_name = py_type
-        # alias can self reference, so we need to check parent_type chain first
-        current = parent_type
-        while current:
-            if isinstance(current, AliasType) and current._name == alias_name:
-                logger.debug(f"AliasType.from_python_type: {py_type} is self-referencing")
-                return current
-            current = current._parent_type
-
-        module = call_site.get_module()
-        if not module or not hasattr(module, alias_name):
-            # only find type alias in the module of the call site
-            # actually this type alias may be imported from other modules by the module of the call site
-            # but we don't handle this case for simplicity
-            return None
-        
-        logger.debug(f"AliasType.from_python_type: {py_type}...")
-        alias_type = AliasType(parent_type, alias_name, None)
-        py_type = getattr(module, alias_name)
-        original_type = Type.from_python_type(py_type, call_site, alias_type)
-        if not original_type:
-            return None
-
-        logger.debug(f"AliasType.from_python_type: {py_type}")
-        alias_type._original_type = original_type
-        return alias_type
-
     def __init__(self, parent_type, name: str, original_type: Type):
         Type.__init__(self, parent_type)
+        # alias name
         self._name = name
         self._original_type = original_type
+
+    @property
+    def original_type(self):
+        return self._original_type
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -870,11 +670,20 @@ class AliasType(Type):
         result.update(self._original_type.type_alias_sources(visited))
         return result
 
-    def convert(self, value, field_path: str, strict=False):
-        return self._original_type.convert(value, field_path, strict)
-
     def __repr__(self):
         return self._name
+    
+    def __hash__(self):
+        return super().__hash__()
+    
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "alias"
+        
+        if not isinstance(other, AliasType):
+            return False
+        
+        return self._name == other._name and self._original_type == other._original_type
     
 class OptionalType(Type):
     @classmethod
@@ -887,27 +696,14 @@ class OptionalType(Type):
             logger.debug(f"OptionalType.from_annotation: {ast.dump(annotation)}")
             return optional_type
         return None
-    
-    @classmethod
-    def from_python_type(cls, py_type: Any, call_site, parent_type) -> Optional['OptionalType']:
-        if isinstance(py_type, typing._UnionGenericAlias) and repr(py_type).startswith('typing.Optional'):
-            # the internal representation of Optional[T] is Union[T, NoneType]
-            logger.debug(f"OptionalType.from_python_type: {py_type}...")
-            optional_type = OptionalType(parent_type, None)
-            args = typing.get_args(py_type)
-            if len(args) == 2 and type(None) in args:
-                non_none_type = args[0] if args[1] is type(None) else args[1]
-                item_type = Type.from_python_type(non_none_type, call_site, optional_type)
-                if item_type:
-                    optional_type._item_type = item_type
-                    logger.debug(f"OptionalType.from_python_type: {py_type}")
-                    return optional_type
-                return None
-        return None
 
     def __init__(self, parent_type, item_type: 'Type'):
         Type.__init__(self, parent_type)
         self._item_type = item_type
+
+    @property
+    def item_type(self):
+        return self._item_type
 
     def related_dataclass_sources(self, visited=set()) -> Dict[str, str]:
         if self in visited:
@@ -923,11 +719,17 @@ class OptionalType(Type):
         visited.add(self)
         return self._item_type.type_alias_sources(visited)
 
-    def convert(self, value, field_path: str, strict=False):
-        if value is None:
-            return None
-        
-        return self._item_type.convert(value, field_path, strict)
-
     def __repr__(self):
         return f"Optional[{self._item_type}]"
+
+    def __hash__(self):
+        return super().__hash__()
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == "Optional"
+        
+        if not isinstance(other, OptionalType):
+            return False
+        
+        return self._item_type == other._item_type

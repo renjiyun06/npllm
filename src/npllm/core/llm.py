@@ -10,7 +10,8 @@ from npllm.utils.notebook_util import is_in_notebook, last_cell_source
 from npllm.utils.source_util import remove_indentation, add_line_number
 from npllm.core.type import Type
 from npllm.core.call_site import CallSite
-from npllm.core.call_llm import LLMCallInfo, LLMCallResult, call_llm_async, call_llm_sync
+from npllm.core.call_llm import LLMCallInfo, call_llm_async, call_llm_sync
+from npllm.core.response_spec import DefaultResponseSpec, InspectModeResponseSpec
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +45,24 @@ class LLM:
     _inspected_funcs: Dict[Type, Dict[Callable, Tuple[str, str]]] = {}
 
     @classmethod
-    def self_inspect(cls, agent_cls: Type) -> Callable:
+    def self_inspect(cls, agent_cls: Type):
         """
         This decorator is used to enable the agent to inspect the whole system's code,
         especially self inspect the code it is in, so that it can understand the context and intent of the code better
         """
-        def _self_inspect(func: Callable) -> Callable:
+        def _self_inspect(*funcs: Callable) -> Callable:
             if agent_cls not in cls._inspected_funcs:
                 cls._inspected_funcs[agent_cls] = {}
+
+            for func in funcs:
+                program_snippet_id = f"PSI-{cls._next_program_snippet_id:04d}"
+                cls._next_program_snippet_id += 1
+                # extract the source code of the func
+                source = remove_indentation(inspect.getsource(func))
+                cls._inspected_funcs[agent_cls][func] = (program_snippet_id, source, func)
             
-            program_snippet_id = f"PSI-{cls._next_program_snippet_id:04d}"
-            cls._next_program_snippet_id += 1
-            # extract the source code of the func
-            source = remove_indentation(inspect.getsource(func))
-            cls._inspected_funcs[agent_cls][func] = (program_snippet_id, source)
-            return func
+            if len(funcs) == 1:
+                return funcs[0]
 
         return _self_inspect
 
@@ -71,7 +75,7 @@ class LLM:
         self._llm_kwargs = kwargs
 
         self._inspected_mode: bool = False
-        self._inspected_funcs: Dict[Callable, (str, str)] = {}
+        self._inspected_funcs: Dict[Callable, (str, str, Callable)] = {}
         self._program_snippets: str = None
 
         self._self_inspect()
@@ -93,9 +97,15 @@ class LLM:
         
         # beautify the program snippets
         program_snippets = []
-        for program_snippet_id, source in self._inspected_funcs.values():
+        for program_snippet_id, source, func in self._inspected_funcs.values():
             program_snippets.append(f"{program_snippet_id}:")
             program_snippets.append("```python")
+            if "self" in inspect.signature(func).parameters:
+                class_name = func.__qualname__.split(".")[0]
+                program_snippets.append(f"# <class {class_name}>")
+            else:
+                module_name = func.__module__
+                program_snippets.append(f"# <module {module_name}>")
             program_snippets.extend(source.splitlines())
             program_snippets.append("```")
             program_snippets.append("")
@@ -172,25 +182,22 @@ class LLM:
             call_site: CallSite = CallSite.call_site(caller_frame, source, relative_call_line_number, absolute_call_line_number, method_name, sync=False)
             expected_return_type: Type = call_site.get_return_type()
 
+            if not "response_spec" in kwargs:
+                kwargs["response_spec"] = DefaultResponseSpec if not self._inspected_mode else InspectModeResponseSpec
+
             # assemble the code context
             # code context includes:
-            # 1. the source code of all related dataclass, including the dataclass of the arguments and the return type
-            # 2. the type alias
-            # 3. the source code of the caller function
-            dataclass_source_lines = []
-            for dataclass_source in call_site.related_dataclass_sources(args, kwargs).values():
-                dataclass_source_lines.extend(dataclass_source.splitlines())
-                dataclass_source_lines.append("")
-
-            type_alias_sources = []
-            for type_alias_source in expected_return_type.type_alias_sources().values():
-                type_alias_sources.append(type_alias_source)
-                type_alias_sources.append("")
+            # 1. the related source code of the caller function
+            # 2. the source code of the caller function
+            related_source_lines = []
+            for related_source in call_site.related_sources(args, kwargs):
+                related_source_lines.extend(related_source.splitlines())
+                related_source_lines.append("")
 
             source_lines = source.splitlines()
 
-            call_line_number = relative_call_line_number + len(dataclass_source_lines) + len(type_alias_sources)
-            code_context = dataclass_source_lines + type_alias_sources + source_lines
+            call_line_number = relative_call_line_number + len(related_source_lines)
+            code_context = related_source_lines + source_lines
 
             llm_call_info = LLMCallInfo(
                 call_id=call_id,
@@ -206,6 +213,7 @@ class LLM:
                 current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
                 inspected_mode=self._inspected_mode,
+                response_spec=kwargs["response_spec"]
             )
             llm_call_result = await call_llm_async(llm_call_info)
             logger.info(f"LLM call {llm_call_result.call_id} used {llm_call_result.prompt_tokens} input tokens, {llm_call_result.completion_tokens} output tokens, cost ${llm_call_result.completion_cost:.6f}")
@@ -264,25 +272,22 @@ class LLM:
             call_site: CallSite = CallSite.call_site(caller_frame, source, relative_call_line_number, absolute_call_line_number, method_name, sync=True)
             expected_return_type: Type = call_site.get_return_type()
 
+            if not "response_spec" in kwargs:
+                kwargs["response_spec"] = DefaultResponseSpec if not self._inspected_mode else InspectModeResponseSpec
+
             # assemble the code context
             # code context includes:
-            # 1. the source code of all related dataclass, including the dataclass of the arguments and the return type
-            # 2. the type alias
-            # 3. the source code of the caller function
-            dataclass_source_lines = []
-            for dataclass_source in call_site.related_dataclass_sources(args, kwargs).values():
-                dataclass_source_lines.extend(dataclass_source.splitlines())
-                dataclass_source_lines.append("")
-
-            type_alias_sources = []
-            for type_alias_source in expected_return_type.type_alias_sources().values():
-                type_alias_sources.append(type_alias_source)
-                type_alias_sources.append("")
+            # 1. the related source code of the caller function
+            # 2. the source code of the caller function
+            related_source_lines = []
+            for related_source in call_site.related_sources(args, kwargs):
+                related_source_lines.extend(related_source.splitlines())
+                related_source_lines.append("")
 
             source_lines = source.splitlines()
 
-            call_line_number = relative_call_line_number + len(dataclass_source_lines) + len(type_alias_sources)
-            code_context = dataclass_source_lines + type_alias_sources + source_lines
+            call_line_number = relative_call_line_number + len(related_source_lines)
+            code_context = related_source_lines + source_lines
 
             llm_call_info = LLMCallInfo(
                 call_id=call_id,
@@ -298,6 +303,7 @@ class LLM:
                 current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
                 inspected_mode=self._inspected_mode,
+                response_spec=kwargs["response_spec"]
             )
             llm_call_result = call_llm_sync(llm_call_info)
             logger.info(f"LLM call {llm_call_result.call_id} used {llm_call_result.prompt_tokens} input tokens, {llm_call_result.completion_tokens} output tokens, cost ${llm_call_result.completion_cost:.6f}")

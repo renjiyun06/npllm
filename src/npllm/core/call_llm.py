@@ -1,13 +1,15 @@
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from litellm import acompletion, completion, completion_cost
 import logging
 from dotenv import load_dotenv
 import json
 import json_repair
 from importlib import resources
+import inspect
 
 from npllm.core.type import Type
+from npllm.utils.source_util import remove_indentation
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,7 @@ class LLMCallInfo:
     program_snippets: str
     llm_kwargs: Dict[str, Any]
     inspected_mode: bool
+    response_spec: Any
 
 @dataclass
 class LLMCallResult:
@@ -57,6 +60,36 @@ def _populate_prompt_template(template, replacements):
     for placeholder, value in replacements.items():
         prompt = prompt.replace(placeholder, value)
     return prompt
+
+def _populate_args(args):
+    if not args:
+        return "[]"
+    
+    result = []
+    for i in range(len(args)):
+        item = None
+        if isinstance(args[i], type) or isinstance(args[i], Callable):
+            item = remove_indentation(inspect.getsource(args[i]))
+        else:
+            item = repr(args[i])
+        result.append(f"<arg-{i}>\n{item}\n</arg-{i}>")
+
+    return "\n".join(result)
+
+def _populate_kwargs(kwargs):
+    if not kwargs:
+        return "{}"
+    
+    result = []
+    for key, value in kwargs.items():
+        if isinstance(value, type) or isinstance(value, Callable):
+            value = remove_indentation(inspect.getsource(value))
+        else:
+            value = repr(value)
+
+        result.append(f"<{key}>\n{value}\n</{key}>")
+
+    return "\n".join(result)
 
 def _get_system_and_user_prompt(llm_call_info: LLMCallInfo) -> tuple[str, str]:
     if llm_call_info.inspected_mode:
@@ -75,8 +108,8 @@ def _get_system_and_user_prompt(llm_call_info: LLMCallInfo) -> tuple[str, str]:
                 "{{current_program_snippet_id}}": llm_call_info.current_program_snippet_id,
                 "{{method_name}}": llm_call_info.method_name,
                 "{{call_line_number}}": str(llm_call_info.call_line_number),
-                "{{args}}": repr(llm_call_info.args),
-                "{{kwargs}}": repr(llm_call_info.kwargs),
+                "{{args}}": _populate_args(llm_call_info.args),
+                "{{kwargs}}": _populate_kwargs(llm_call_info.kwargs),
                 "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
             }
         )
@@ -93,8 +126,8 @@ def _get_system_and_user_prompt(llm_call_info: LLMCallInfo) -> tuple[str, str]:
             {
                 "{{method_name}}": llm_call_info.method_name,
                 "{{call_line_number}}": str(llm_call_info.call_line_number),
-                "{{args}}": repr(llm_call_info.args),
-                "{{kwargs}}": repr(llm_call_info.kwargs),
+                "{{args}}": _populate_args(llm_call_info.args),
+                "{{kwargs}}": _populate_kwargs(llm_call_info.kwargs),
                 "{{expected_return_type}}": repr(llm_call_info.expected_return_type)
             }
         )
@@ -114,9 +147,6 @@ def _assemble_messages(llm_call_info: LLMCallInfo) -> List[Dict[str, str]]:
     return messages
 
 def _parse_llm_response(response, llm_call_info: LLMCallInfo) -> LLMCallResult:
-    content = response.choices[0].message.content.strip()
-    logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n""")
-
     content = response.choices[0].message.content.strip()
     logger.debug(f"""Raw response from LLM for {llm_call_info.call_id}: \n\n{content}\n""")
 
@@ -143,8 +173,7 @@ def _parse_llm_response(response, llm_call_info: LLMCallInfo) -> LLMCallResult:
             # TODO we can try to call llm again to repair the JSON
             raise e_2
 
-    logger.debug(f"Reasoning from LLM for {llm_call_info.call_id}: \n\n{reasoning}\n")
-    result = llm_call_info.expected_return_type.convert(json_value, "__root", strict=False)
+    result = llm_call_info.response_spec.return_type_mapping(llm_call_info.expected_return_type, json_value)
     logger.info(f"Successfully called LLM for {llm_call_info.call_id}")
 
     llm_call_result = LLMCallResult(

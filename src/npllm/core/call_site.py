@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 import ast
 import typing
 from types import FrameType
-from typing import Dict, Optional
+from typing import List, Optional, Callable
 import inspect
 from dataclasses import is_dataclass
 import logging
 
-from npllm.core.type import Type, BasicType, AnyType, TupleType
+from npllm.core.type import Type, BoolType, AnyType, TupleType
 from npllm.utils.notebook_util import is_in_notebook, cell_source, get_dataclass_source
 
 logger = logging.getLogger(__name__)
@@ -176,24 +176,37 @@ class CallSite(ABC):
     def is_in_notebook(self) -> bool:
         return is_in_notebook(self._frame)
 
-    def related_dataclass_sources(self, args, kwargs) -> Dict[str, str]:
+    def related_sources(self, args, kwargs) -> List[str]:
         """
         Get the source code of all related dataclass, including the dataclass of the arguments and the return type
         """
-        result = {}
-        result.update(self._return_type.related_dataclass_sources())
+
+        result = []
+
+        dataclass_sources = {}
+        dataclass_sources.update(self._return_type.related_dataclass_sources())
+
+        for source in dataclass_sources.values():
+            if source not in result:
+                result.append(source)
+
+        alias_sources = self._return_type.type_alias_sources()
+        for source in alias_sources.values():
+            if source not in result:
+                result.append(source)
+
         for arg in args:
             # here we just check if the argument is a dataclass or a list of dataclass,
             # any other complex data structure is not considered for now
-            if hasattr(arg, '__dataclass_fields__'):
-                result[arg.__class__.__qualname__] = inspect.getsource(arg.__class__)
-            elif isinstance(arg, list) and len(arg) > 0 and hasattr(arg[0], '__dataclass_fields__'):
-                result[arg[0].__class__.__qualname__] = inspect.getsource(arg[0].__class__)
+            if is_dataclass(arg) and not isinstance(arg, type) and arg.__class__.__qualname__ not in dataclass_sources:
+                result.append(inspect.getsource(arg.__class__))
+            elif isinstance(arg, list) and len(arg) > 0 and is_dataclass(arg[0]) and not isinstance(arg[0], type) and arg[0].__class__.__qualname__ not in dataclass_sources:
+                result.append(inspect.getsource(arg[0].__class__))
 
         for _, v in kwargs.items():
-            if hasattr(v, '__dataclass_fields__'):
-                result[v.__class__.__qualname__] = inspect.getsource(v.__class__)
-
+            if is_dataclass(v) and not isinstance(v, type) and v.__class__.__qualname__ not in dataclass_sources:
+                result.append(inspect.getsource(v.__class__))
+                
         return result
 
 class IfCallSite(CallSite):
@@ -205,7 +218,7 @@ class IfCallSite(CallSite):
         ...
     """
     def _parse_return_type(self) -> Type:
-        return BasicType("bool")
+        return BoolType(None)
 
 class WhileCallSite(CallSite):
     """
@@ -216,7 +229,7 @@ class WhileCallSite(CallSite):
         ...
     """
     def _parse_return_type(self) -> Type:
-        return BasicType("bool")
+        return BoolType(None)
 
 class AssignCallSite(CallSite):
     """
@@ -231,9 +244,11 @@ class AssignCallSite(CallSite):
         target = self._caller_node.targets[0]
         if isinstance(target, ast.Tuple):
             elts_len = len(target.elts)
-            item_types = [AnyType() for _ in range(elts_len)]
+            tuple_type = TupleType(None, None)
+            item_types = [AnyType(tuple_type) for _ in range(elts_len)]
             # let large language model to infer the type of each item in the tuple from the code context
-            return TupleType(item_types=tuple(item_types))
+            tuple_type._item_types = item_types
+            return tuple_type
         
         # we need to find the declaration of the target variable in the code context
         if is_in_notebook(self._frame):
