@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import ast
 import typing
 from types import FrameType
-from typing import List, Optional, Callable
+from typing import List, Optional
 import inspect
 from dataclasses import is_dataclass
 import logging
