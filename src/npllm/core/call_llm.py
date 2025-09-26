@@ -10,6 +10,7 @@ import inspect
 
 from npllm.core.type import Type
 from npllm.utils.source_util import remove_indentation
+from npllm.core.return_value_parser import ReturnValueParser
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class LLMCallInfo:
     program_snippets: str
     llm_kwargs: Dict[str, Any]
     inspected_mode: bool
-    response_spec: Any
+    return_value_parser: ReturnValueParser
 
 @dataclass
 class LLMCallResult:
@@ -71,7 +72,7 @@ def _populate_args(args):
         if isinstance(args[i], type) or isinstance(args[i], Callable):
             item = remove_indentation(inspect.getsource(args[i]))
         else:
-            item = repr(args[i])
+            item = args[i]
         result.append(f"<arg-{i}>\n{item}\n</arg-{i}>")
 
     return "\n".join(result)
@@ -85,7 +86,7 @@ def _populate_kwargs(kwargs):
         if isinstance(value, type) or isinstance(value, Callable):
             value = remove_indentation(inspect.getsource(value))
         else:
-            value = repr(value)
+            value = value
 
         result.append(f"<{key}>\n{value}\n</{key}>")
 
@@ -173,8 +174,14 @@ def _parse_llm_response(response, llm_call_info: LLMCallInfo) -> LLMCallResult:
             # TODO we can try to call llm again to repair the JSON
             raise e_2
 
-    result = llm_call_info.response_spec.return_type_mapping(llm_call_info.expected_return_type, json_value)
+    result = llm_call_info.return_value_parser.parse(llm_call_info.expected_return_type, json_value)
     logger.info(f"Successfully called LLM for {llm_call_info.call_id}")
+
+    try:
+        cost = completion_cost(response)
+    except Exception as e:
+        logger.warning(f"Failed to calculate completion cost for LLM call {llm_call_info.call_id}, error: {e}")
+        cost = -1.0
 
     llm_call_result = LLMCallResult(
         call_id=llm_call_info.call_id,
@@ -183,7 +190,7 @@ def _parse_llm_response(response, llm_call_info: LLMCallInfo) -> LLMCallResult:
         prompt_tokens=response.usage.prompt_tokens,
         completion_tokens=response.usage.completion_tokens,
         total_tokens=response.usage.total_tokens,
-        completion_cost=completion_cost(response)
+        completion_cost=cost
     )
     return llm_call_result
 

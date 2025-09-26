@@ -12,6 +12,7 @@ from npllm.core.type import Type
 from npllm.core.call_site import CallSite
 from npllm.core.call_llm import LLMCallInfo, call_llm_async, call_llm_sync
 from npllm.core.response_spec import DefaultResponseSpec, InspectModeResponseSpec
+from npllm.core.return_value_parser import DefaultReturnValueParser
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class LLM:
 
         return _self_inspect
 
-    def __init__(self, role=None, model="openrouter/google/gemini-2.5-flash", **kwargs):
+    def __init__(self, role=None, model="openrouter/google/gemini-2.5-flash", return_value_parser=DefaultReturnValueParser(), **kwargs):
         self.role: str = role
         if not self.role and self.__class__.__name__ != "LLM":
             self.role = self.__class__.__doc__ or ""
@@ -83,6 +84,8 @@ class LLM:
         self._total_input_tokens = 0
         self._total_output_tokens = 0
         self._total_completion_cost = 0.0
+
+        self._return_value_parser = return_value_parser
 
     def _self_inspect(self):
         """
@@ -213,7 +216,7 @@ class LLM:
                 current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
                 inspected_mode=self._inspected_mode,
-                response_spec=kwargs["response_spec"]
+                return_value_parser=self._return_value_parser
             )
             llm_call_result = await call_llm_async(llm_call_info)
             logger.info(f"LLM call {llm_call_result.call_id} used {llm_call_result.prompt_tokens} input tokens, {llm_call_result.completion_tokens} output tokens, cost ${llm_call_result.completion_cost:.6f}")
@@ -303,7 +306,7 @@ class LLM:
                 current_program_snippet_id=current_program_snippet_id,
                 llm_kwargs=self._llm_kwargs,
                 inspected_mode=self._inspected_mode,
-                response_spec=kwargs["response_spec"]
+                return_value_parser=self._return_value_parser
             )
             llm_call_result = call_llm_sync(llm_call_info)
             logger.info(f"LLM call {llm_call_result.call_id} used {llm_call_result.prompt_tokens} input tokens, {llm_call_result.completion_tokens} output tokens, cost ${llm_call_result.completion_cost:.6f}")
