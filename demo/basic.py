@@ -33,8 +33,9 @@ async def f_tuple_without_type_annotations():
 async def f_dict():
     pass
 
-async def f_union():
-    pass
+async def f_union() -> Union[Union[int, str], str]:
+    llm = LLM()
+    return await llm.reason()
 
 async def f_optional() -> Optional[int]:
     llm = LLM()
@@ -57,7 +58,7 @@ async def f_return_stmt() -> int:
     return await llm.reason()
 
 async def main():
-    print(await f_optional())
+    print(await f_union())
 
 if __name__ == "__main__":
     import asyncio

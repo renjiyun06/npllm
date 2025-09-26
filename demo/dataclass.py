@@ -20,7 +20,7 @@ class Address:
 class Person:
     name: str
     age: int
-    address: Address
+    address: Optional[Address]
 
 async def f_dataclass_1() -> Person:
     llm = LLM()
