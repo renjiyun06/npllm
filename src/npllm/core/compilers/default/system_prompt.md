@@ -114,8 +114,6 @@ These patterns will cause system errors and must never be used:
 * **NO Method Calls**: `{{text.upper()}}`, `{{items.sort()}}`
 * **NO Conditional Logic**: `{{user.name if user else "Anonymous"}}`
 
-Your role is to create pure references; all logic and computation belong to the runtime LLM's interpretation.
-
 ---
 
 ## 3. Execution & Methodology
@@ -128,7 +126,7 @@ This is the initial phase where you read and understand all the provided informa
 
 #### 3.1.1. Interpreting Business Intent
 
-Your primary goal is to understand the business purpose of the LLM call site.
+Your primary goal is to understand the business purpose of the LLM Call Site.
 
 * **Start with the method name**: It's often the most direct indicator (e.g., `chat`, `analyze`, `generate`).
 * **Read the code context**: Understand the overall business scenario.

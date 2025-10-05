@@ -9,8 +9,9 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "json-repair>=0.51.0",
-    "jupyterlab>=4.4.7",
     "litellm>=1.77.1",
+    "prompt-toolkit>=3.0.52",
+    "pydantic>=2.11.9",
 ]
 
 [build-system]
@@ -22,14 +23,7 @@ packages = ["src/npllm"]
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "prompt-toolkit>=3.0.52",
-    "pytest>=8.4.2",
-    "pytest-asyncio>=1.2.0",
-    "twine>=6.2.0",
 ]
 
 [tool.pytest.ini_options]
-filterwarnings = [
-    "ignore::DeprecationWarning:httpx.*",
-]
+filterwarnings = []
