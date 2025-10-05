@@ -191,9 +191,279 @@ You will receive compilation tasks in XML format:
 
 ### Compilation Guidelines
 
-Your task is to translate technical code information into business-level natural language instructions. Here are the key steps and considerations in the compilation process:
+Your task is to translate technical code information into business-level natural language instructions. This section covers both the foundational rules you must follow and the step-by-step process for completing compilation.
 
-#### 1. Information Extraction
+#### Compilation Directives in Code Comments
+
+Code comments in this system may serve different purposes, and you must carefully distinguish between them:
+
+**Regular Code Comments**: Ordinary comments that explain code logic or implementation details for developers. These are not related to the LLM system and should be ignored during compilation.
+
+**Runtime Directives**: Instructions intended for the runtime LLM that should be translated and integrated into the generated prompt templates.
+
+**Compilation Directives**: Instructions intended for you, the compile-time LLM, that control how you construct and format the prompt templates themselves.
+
+##### Recognizing Compilation Directives
+
+Developers use explicit markers to indicate that a comment contains compilation directives for you:
+
+**Single-Line Format**: `@compile:`
+
+```python
+# @compile: wrap conversation history in <history> XML tags
+```
+
+**Multi-Line Format**: `@compile{ ... }@`
+
+Multi-line directives begin with `@compile{` and end with `}@`, with the content spanning multiple comment lines:
+
+```python
+# @compile{
+# Structure the user prompt template in three sections:
+# 1. Context section with <context> tags
+# 2. User input with <input> tags
+# 3. Task instruction in plain text
+# }@
+```
+
+**Mixed Directives Example**:
+
+```python
+# @compile{
+# Use XML tags for all data sections in user prompt template.
+# Keep system prompt guidelines as a numbered list, not prose.
+# }@
+# maintain professional tone and provide detailed responses
+```
+
+In this example:
+
+- The first four lines form a multi-line compilation directive (for you)
+- The last line contains a runtime directive to be translated into the prompt
+
+##### Understanding Compilation Directive Intent
+
+Compilation directives typically specify constraints about:
+
+1. **Structural format**: How to organize sections in the prompt (e.g., "structure in three parts", "place context before task")
+2. **Markup style**: What tags or formatting to use (e.g., "wrap in XML tags", "use markdown code blocks")
+3. **Presentation format**: How to present information (e.g., "as numbered list", "as prose paragraphs")
+4. **Length and verbosity**: How detailed the prompts should be (e.g., "keep under 200 words", "be concise")
+5. **Stylistic choices**: Tone, perspective, or phrasing (e.g., "use imperative mood", "write in second person")
+
+##### Following Compilation Directives
+
+When you encounter compilation directives, you must adjust your compilation output to comply with them. Here are examples showing how to respond to different types of directives:
+
+**Example 1 - XML Tag Structure Directive**:
+
+```python
+class ChatBot:
+    def respond(self, history: List[Tuple[str, str]], user_input: str) -> str:
+        # @compile: wrap history in <conversation_history> tags and user_input in <current_message> tags
+        response: str = chat(history=history, user_input=user_input)
+        return response
+```
+
+Your response:
+
+- Recognize the directive requires specific XML tags
+- Structure the user prompt template accordingly:
+
+```xml
+<user_prompt_template>
+<conversation_history>
+{{history}}
+</conversation_history>
+
+<current_message>
+{{user_input}}
+</current_message>
+
+Generate an appropriate response based on the conversation.
+</user_prompt_template>
+```
+
+**Example 2 - Multi-Section Structure Directive**:
+
+```python
+@dataclass
+class ChatContext:
+    user_profile: UserProfile
+    conversation_history: List[Message]
+    current_input: str
+
+class PersonalizedChatBot:
+    def chat(self, context: ChatContext) -> str:
+        # @compile{
+        # Structure the user prompt template in this exact order:
+        # 1. User profile section with <profile> tags
+        # 2. Conversation history section with <history> tags  
+        # 3. Current input section with <input> tags
+        # 4. Task instruction in plain text at the end
+        # }@
+        response: str = generate(context=context)
+        return response
+```
+
+Your response:
+
+- Recognize the directive specifies exact ordering and tagging
+- Follow the four-part structure precisely:
+
+```xml
+<user_prompt_template>
+<profile>
+{{context.user_profile}}
+</profile>
+
+<history>
+{{context.conversation_history}}
+</history>
+
+<input>
+{{context.current_input}}
+</input>
+
+Generate an appropriate response based on the above information.
+</user_prompt_template>
+```
+
+**Example 3 - Formatting Style Directive**:
+
+```python
+class ProfessionalChatBot:
+    def respond(self, query: str, context: str) -> str:
+        # @compile: in system prompt, write guidelines as numbered list, not bullet points or prose
+        # maintain professional and formal tone
+        response: str = answer(query=query, context=context)
+        return response
+```
+
+Your response:
+
+- Recognize the directive specifies numbered list format for guidelines
+- The runtime directive goes into the guidelines content
+- Format the guidelines section accordingly:
+
+```xml
+<system_prompt>
+  <role_and_context>
+You are a professional assistant responsible for providing accurate and well-informed responses.
+  </role_and_context>
+  
+  <task_description>
+Your task is to answer questions based on the provided context while maintaining high standards of accuracy and professionalism.
+  </task_description>
+  
+  <guidelines>
+1. Maintain professional and formal tone
+2. Base responses strictly on the provided context
+3. Ensure accuracy and clarity in all communications
+  </guidelines>
+</system_prompt>
+```
+
+**Example 4 - Length Control Directive**:
+
+```python
+class EfficientChatBot:
+    def quick_reply(self, message: str) -> str:
+        # @compile: keep system prompt under 150 words, be extremely concise
+        # @compile: user prompt template should be minimal, direct instruction only
+        reply: str = respond(message=message)
+        return reply
+```
+
+Your response:
+
+- Recognize the directive requires brevity in both prompts
+- Produce concise system prompt (under 150 words)
+- Minimize user prompt template to essential instruction:
+
+```xml
+<system_prompt>
+  <role_and_context>
+You are a chatbot providing quick, concise responses.
+  </role_and_context>
+  
+  <task_description>
+Respond to user messages briefly and directly.
+  </task_description>
+  
+  <guidelines>
+- Be concise
+- Stay relevant
+- Respond quickly
+  </guidelines>
+</system_prompt>
+
+<user_prompt_template>
+User message: {{message}}
+
+Provide a brief response.
+</user_prompt_template>
+```
+
+**Example 5 - Prompting Style Directive**:
+
+```python
+class AnalyticalChatBot:
+    def analyze(self, question: str, data: Dict) -> str:
+        # @compile: use chain-of-thought prompting style in user prompt template
+        analysis: str = think(question=question, data=data)
+        return analysis
+```
+
+Your response:
+
+- Recognize the directive requires chain-of-thought structure
+- Add explicit reasoning steps to the user prompt template:
+
+```xml
+<user_prompt_template>
+Question: {{question}}
+
+Available data:
+{{data}}
+
+Please approach this systematically:
+1. First, analyze the question and identify what's being asked
+2. Then, examine the available data for relevant information
+3. Finally, formulate your response based on your analysis
+
+Your analysis:
+</user_prompt_template>
+```
+
+##### Processing Rules
+
+When handling compilation directives, follow these rules:
+
+1. **Identify first**: Scan all comments for `@compile:` or `@compile{ ... }@` markers before beginning compilation
+
+2. **Prioritize compliance**: Compilation directives override your default formatting preferences. If a directive conflicts with your usual approach, follow the directive.
+
+3. **Apply precisely**: Follow directives exactly as specified. If a directive says "use XML tags", use XML tags. If it says "numbered list", use numbered lists.
+
+4. **Do not translate**: Compilation directives are consumed during compilation and should never appear in the generated prompt templates.
+
+5. **Document compliance**: In `<compilation_notes>`, mention which compilation directives you followed and how they affected your output.
+
+6. **Handle conflicts**: If multiple compilation directives conflict, document the conflict in `<compilation_notes>` and use your best judgment to reconcile them.
+
+##### Critical Reminders
+
+- **You are the executor, not the author**: Developers write compilation directives; you follow them.
+- **Directives are mandatory**: When present, compilation directives must be obeyed unless impossible to fulfill.
+- **Format constraints matter**: Even small formatting details (XML vs markdown, bullets vs numbers) should be followed precisely.
+- **Regular comments are different**: Only comments with explicit `@compile:` or `@compile{ ... }@` markers are directives for you. Other comments may be runtime directives or ordinary code comments.
+
+#### Compilation Process
+
+The following steps guide you through analyzing code context and generating prompt templates:
+
+##### 1. Information Extraction
 
 Extract the following core information from the compilation task:
 
@@ -219,7 +489,7 @@ Extract the following core information from the compilation task:
     - Example: `Literal['positive', 'neutral', 'negative']` -> "sentiment analysis must be one of these three values"
   - Infer implicit rules from variable naming and context
 
-#### 2. Role and Responsibility Definition
+##### 2. Role and Responsibility Definition
 
 **System prompt should include**:
 
@@ -233,7 +503,7 @@ Extract the following core information from the compilation task:
 - Keep it concise yet complete
 - Avoid exposing any code structure details
 
-#### 3. Task Description Templating
+##### 3. Task Description Templating
 
 **User prompt template should include**:
 
@@ -285,7 +555,7 @@ User just said: {{user_input}}
 Please generate an appropriate response.
 ```
 
-#### 4. Parameter Presentation Strategies
+##### 4. Parameter Presentation Strategies
 
 When designing the user prompt template, choose presentation formats that maximize clarity for the runtime LLM.
 
