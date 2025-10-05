@@ -330,6 +330,159 @@ When designing the user prompt template, choose presentation formats that maximi
 
 **Note**: The system will automatically append the technical output format (JSON Schema). In your compiled prompts, describe **what information** the runtime LLM needs to provide and **why**, but never **how** to format it. Focus on semantic meaning, not structure.
 
+### Parameter Reference Contract
+
+This section defines the precise protocol for how you (the compile-time LLM) reference parameters in prompt templates, and how the system will resolve and fill these references at runtime.
+
+#### Core Principle
+
+**You create semantic placeholders; the system handles the mapping and filling.**
+
+Your job is to reference parameters in a way that is:
+
+- Clear and unambiguous for the system to identify
+- Natural and meaningful for the runtime LLM to understand
+- Consistent with the business-language abstraction
+
+#### Placeholder Syntax Rules
+
+**Basic Format**: All parameter references must use double-brace syntax: `{{placeholder_name}}`
+
+**Naming Rules**:
+
+1. **For positional parameters**: Always use `argN` format where N is the position index (0-based)
+   - Position 0: `{{arg0}}`
+   - Position 1: `{{arg1}}`
+   - Position 2: `{{arg2}}`
+   - This rule applies regardless of whether the compilation task includes a `name` attribute
+
+2. **For keyword parameters**: Use the exact parameter name as declared
+   - Declaration: `chat(session=..., user_input=...)`
+   - Placeholders: `{{session}}`, `{{user_input}}`
+
+3. **Field access for structured types**: Use dot notation
+   - For object fields: `{{request.user_id}}`, `{{request.message}}`
+   - For nested fields: `{{user.profile.email}}`, `{{config.db.host}}`
+   - Each level must correspond to an actual field in the type definition
+
+4. **Collection references**: Always reference the entire collection as a unit
+   - Valid: `{{items}}`, `{{message_list}}`, `{{config_dict}}`
+   - Invalid: `{{items[0]}}`, `{{items[-1]}}`, `{{dict[key]}}`
+
+#### System Filling Guarantees
+
+When the system fills your placeholders at runtime, it guarantees the following behaviors:
+
+**For scalar types** (`str`, `int`, `float`, `bool`):
+
+- Filled as plain text representation of the value
+- Example: `{{user_id}}` → `"user_12345"`
+
+**For collection types** (`List`, `Set`, `Tuple`):
+
+- Filled as a human-readable text representation
+- Lists/tuples preserve order
+- Sets show all elements
+- Example: `{{tags}}` → `["python", "coding", "tutorial"]` or formatted as newline-separated items depending on context
+
+**For dictionary types** (`Dict`, `dict`):
+
+- Filled as key-value text representation
+- Example: `{{config}}` → Formatted as readable key-value pairs
+
+**For custom types** (dataclass, NamedTuple, etc.):
+
+- When using `{{object}}`: Filled as a structured text representation of all fields
+- When using `{{object.field}}`: Filled as the specific field's value
+- Nested field access works transitively: `{{request.user.name}}`
+
+#### Prohibited Patterns
+
+These patterns will cause system errors and must never be used:
+
+**PROHIBITED - Index/subscript access**: `{{session[0]}}`, `{{items[-1]}}`, `{{data[key]}}`
+Reason: You don't have runtime knowledge of collection sizes or keys
+
+**PROHIBITED - Computed expressions**: `{{len(items)}}`, `{{user.age + 1}}`, `{{items.filter(...)}}`
+Reason: Placeholders are pure references, not expressions
+
+**PROHIBITED - Method calls**: `{{text.upper()}}`, `{{items.sort()}}`
+Reason: Same as above, no computation in placeholders
+
+**PROHIBITED - Conditional logic**: `{{user.name if user else "Anonymous"}}`
+Reason: Template logic belongs in the runtime LLM's interpretation, not in placeholder syntax
+
+#### Semantic Naming Flexibility
+
+**Question**: Can I use semantic aliases instead of the prescribed names?
+
+**Answer**: No. You must follow the strict naming rules:
+
+- Positional parameters: `{{arg0}}`, `{{arg1}}`, etc.
+- Keyword parameters: exact parameter name
+
+Examples:
+
+- Correct: `{{arg0}}` for first positional parameter
+- Incorrect: Using `{{query}}` when it's a positional parameter
+- Correct: `{{session}}` when it's a keyword parameter named "session"
+- Incorrect: Using `{{conversation_history}}` instead of `{{session}}`
+
+**Rationale**: The system needs direct, unambiguous mapping to resolve placeholders. However, you can (and should) provide semantic context around the placeholder:
+
+```
+Current conversation history:
+{{arg0}}
+```
+
+Here, "conversation history" is the semantic description, while `{{arg0}}` is the precise reference.
+
+#### Multi-Parameter Reference Example
+
+Given this compilation task:
+
+```xml
+<positional_parameters>
+  <param position="0" type="str" />
+  <param position="1" type="List[str]" />
+</positional_parameters>
+<keyword_parameters>
+  <param name="max_results" type="int" />
+  <param name="user_prefs" type="UserPreferences" />
+</keyword_parameters>
+```
+
+Valid user prompt template:
+
+```
+Search query: {{arg0}}
+
+Available context information:
+{{arg1}}
+
+Maximum number of results to return: {{max_results}}
+
+User preferences:
+- Language: {{user_prefs.language}}
+- Region: {{user_prefs.region}}
+```
+
+#### Edge Case: When Parameter Names Are Unclear
+
+This edge case primarily applies to keyword parameters. For positional parameters, always use the `argN` format regardless of any other information in the compilation task.
+
+If a keyword parameter in the compilation task has an unclear semantic name (rare), document this in `<compilation_notes>` and use the provided name as-is. Never invent alternative names.
+
+#### Validation Checklist
+
+Before finalizing your compilation, verify:
+
+- [ ] Every parameter from the task appears exactly once as a placeholder (unless intentionally omitted)
+- [ ] All placeholder names exactly match the parameter names in the task
+- [ ] No index access, method calls, or computed expressions used
+- [ ] Field access (dot notation) only used for fields that exist in type definitions
+- [ ] Collections referenced as complete units, never with subscripts
+
 ### Handling Edge Cases
 
 **Case 1 - Conflicting Signals**:
