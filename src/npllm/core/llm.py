@@ -5,6 +5,7 @@ import os
 from types import FrameType
 from typing import Any, Callable, Optional
 from litellm import acompletion
+import json
 
 import json_repair
 
@@ -84,16 +85,22 @@ class LLM:
 
             if response_content.startswith("```json"):
                 response_content = response_content[len("```json"):-len("```")].strip()
-            
+
             json_value = None
             if (
                 response_content.startswith("{") and response_content.endswith("}") or 
                 response_content.startswith("[") and response_content.endswith("]") or
-                response_content.startswith('"') and response_content.endswith('"') or
                 response_content in ["true", "false", "null"] or
                 response_content.isdigit()
             ):
                 json_value = json_repair.loads(response_content)
+            elif response_content.startswith('"') and response_content.endswith('"'):
+                try:
+                    json_value = json.loads(response_content)
+                except Exception as e:
+                    # it means the response content is a json string, but not correctly escaped
+                    # just let the whole string as the json value
+                    json_value = response_content
             else:
                 json_value = response_content
 
