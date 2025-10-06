@@ -139,7 +139,9 @@ class CallSite(RuntimeContext):
         self._enclosing_class: Optional[Type] = self._parse_enclosing_class()
         self._enclosing_module: Optional[ModuleType] = self._parse_enclosing_module()
         self._return_type: Type = self.parse_return_type()
-        self._args_types: List[Tuple[Union[int, str], Type]] = self.parse_args_types()
+        self._positional_parameters: List[Tuple[int, str]] = self._parse_positional_parameters()
+        self._keyword_parameters: List[Tuple[str, str]] = self._parse_keyword_parameters()
+        self._args_types: List[Tuple[Union[int, str], Type]] = self._positional_parameters + self._keyword_parameters
         self._dependent_modules: List[ModuleType] = self._parse_dependent_modules()
 
     @abstractmethod
@@ -154,13 +156,15 @@ class CallSite(RuntimeContext):
             dependent_modules.update(arg_type.get_dependent_modules())
         return dependent_modules
 
-    def parse_args_types(self) -> List[Tuple[Union[int, str], Type]]:
-        # only support local variables and instance variables for now
-        all_args = []
-        all_args.extend((i, arg) for i, arg in enumerate(self._call_node.args))
-        all_args.extend([(kw.arg, kw.value) for kw in self._call_node.keywords])
+    def _parse_positional_parameters(self) -> List[Tuple[int, str]]:
+        return self._parse_args_types([(i, arg) for i, arg in enumerate(self._call_node.args)])
+
+    def _parse_keyword_parameters(self) -> List[Tuple[str, str]]:
+        return self._parse_args_types([(kw.arg, kw.value) for kw in self._call_node.keywords])
+
+    def _parse_args_types(self, args) -> List[Tuple[Union[int, str], Type]]:
         args_types = []
-        for arg_name, arg in all_args:
+        for arg_name, arg in args:
             annotation = None
             if isinstance(arg, ast.Constant):
                 annotation = arg
@@ -242,6 +246,14 @@ class CallSite(RuntimeContext):
     @property
     def return_type(self) -> Type:
         return self._return_type
+
+    @property
+    def positional_parameters(self) -> List[Tuple[int, str]]:
+        return self._positional_parameters
+
+    @property
+    def keyword_parameters(self) -> List[Tuple[str, str]]:
+        return self._keyword_parameters
 
     @property
     def args_types(self) -> List[Tuple[Union[int, str], Type]]:
