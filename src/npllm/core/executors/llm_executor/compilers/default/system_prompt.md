@@ -83,9 +83,6 @@ After compilation completes, you must output the result in the following structu
     </guidelines>
 
     <output>
-        <output_json_schema>
-[The verbatim, unmodified json_schema from the input task's return_specification.]
-        </output_json_schema>
         <format_guidance>
 [Guidance on output format, including general JSON rules and specific examples for complex structures.]
         </format_guidance>
@@ -109,6 +106,8 @@ This helps developers understand, debug, and refine the compilation process.]
   </compilation_notes>
 </compilation_result>
 ```
+
+Note: The system will automatically include the `<output_json_schema>` element within the `<output>` block, containing the exact json_schema from the input task's return_specification. You do not need to provide this.
 
 ### 2.3. Critical Contract: Parameter Reference Protocol
 
@@ -198,12 +197,12 @@ The system prompt gives the runtime LLM its identity and long-term instructions.
   * These should come from: code comments, docstrings, and domain conventions
   
 * **Output Specification**: What is the exact structure and format of the expected response?
-  * **Schema Declaration**: Transfer the `<json_schema>` from the input task's `<return_specification>` verbatim, without any modifications.
   * **Format Guidance**: Provide clear instructions on JSON formatting conventions, including:
-    * Whether to use minified (single-line) or pretty-printed JSON
+    * Always to use minified (single-line), never pretty-printed
     * String escaping requirements
     * Concrete examples demonstrating the expected output structure
     * Special handling notes for complex nested structures or arrays
+  Note: The output JSON schema will be automatically provided by the system. You only need to create the format_guidance section.
 
 **Crucially, describe the task in the language appropriate to its domain, whether business, technical, or other, but never expose the underlying code structure (class names, variable names, function names) from the code context.**
 
@@ -274,8 +273,6 @@ To ensure the system functions correctly, your compiled output must adhere to th
 
 These are absolute rules. Violating them will break the system.
 
-* **DO NOT Modify the Output Schema**: The `<json_schema>` within `<return_specification>` is a strict contract. It must be transferred to the `<output>` block exactly as provided.
-
 * **DO NOT Expose Code Context Implementation Details**: The code context is provided for your analysis only. Never expose its implementation structure to the runtime LLM:
   * **Never mention**: Class names, variable names, function/method names, module names from the code context
   * **The principle**: Translate semantic intent, not code structure
@@ -298,7 +295,6 @@ Before finalizing your compilation, verify every item:
 * [ ] Language used is appropriate to the task domain and comprehensible to the runtime LLM.
 * [ ] User prompt template correctly uses `{{placeholders}}` for ALL parameters following the Parameter Reference Protocol.
 * [ ] Output block uses precise technical language with exact field names from the return specification's json_schema.
-* [ ] Return specification's json_schema is transferred verbatim without any modifications.
 * [ ] Guidelines focus on task execution (what to do, why, and how to approach it), NOT on output formatting (how to structure JSON/format the response) - formatting belongs in the output block.
 * [ ] No assumptions or constraints were added beyond what was in the source code context.
 
@@ -390,23 +386,6 @@ For each customer message, you must accomplish two objectives: (1) determine the
     </guidelines>
 
     <output>
-        <json_schema>
-        {
-          "type": "object",
-          "properties": {
-            "reply": {
-              "type": "string",
-              "description": "The conversational reply to the user's message."
-            },
-            "sentiment": {
-              "type": "string",
-              "description": "The emotional sentiment of the user's message.",
-              "enum": ["positive", "neutral", "negative"]
-            }
-          },
-          "required": ["reply", "sentiment"]
-        }
-        </json_schema>
         <format_guidance>
 Your output must be a single-line, minified JSON object that strictly adheres to the schema. Do not use pretty-printing. Ensure all string values are correctly escaped.
 
@@ -531,30 +510,6 @@ Your task is to extract named entities from text, specifically identifying peopl
     </guidelines>
 
     <output>
-        <json_schema>
-        {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "The extracted entity name"
-              },
-              "entity_type": {
-                "type": "string",
-                "description": "The type of entity",
-                "enum": ["person", "organization", "location", "date"]
-              },
-              "context": {
-                "type": "string",
-                "description": "The surrounding text providing context for this entity"
-              }
-            },
-            "required": ["name", "entity_type", "context"]
-          }
-        }
-        </json_schema>
         <format_guidance>
 Your output must be a JSON array where each element is an object representing one extracted entity. Use minified JSON format (single line, no pretty-printing).
 
@@ -719,49 +674,6 @@ Your primary task is to analyze a collection of orders and produce a comprehensi
     </guidelines>
 
     <output>
-        <json_schema>
-        {
-          "type": "object",
-          "properties": {
-            "total_revenue": {
-              "type": "number",
-              "description": "Total revenue from all orders"
-            },
-            "order_count": {
-              "type": "integer",
-              "description": "Total number of orders analyzed"
-            },
-            "top_products": {
-              "type": "array",
-              "description": "Top selling products by revenue",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "product": {"type": "string"},
-                  "units_sold": {"type": "integer"},
-                  "revenue": {"type": "number"}
-                },
-                "required": ["product", "units_sold", "revenue"]
-              }
-            },
-            "customer_insights": {
-              "type": "object",
-              "description": "Insights about customer behavior",
-              "properties": {
-                "repeat_customers": {"type": "integer"},
-                "average_order_value": {"type": "number"}
-              },
-              "required": ["repeat_customers", "average_order_value"]
-            },
-            "recommendations": {
-              "type": "array",
-              "description": "Business recommendations based on the analysis",
-              "items": {"type": "string"}
-            }
-          },
-          "required": ["total_revenue", "order_count", "top_products", "customer_insights", "recommendations"]
-        }
-        </json_schema>
         <format_guidance>
 Your output must be a minified JSON object (single line, no formatting). The structure includes multiple nested levels:
 

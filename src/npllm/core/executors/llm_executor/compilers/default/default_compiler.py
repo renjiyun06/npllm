@@ -19,12 +19,11 @@ class DefaultSystemPromptTemplate(SystemPromptTemplate):
     def __init__(self, node: ET.Element):
         self._node = node
     
-    def format(self, args: List[Any], kwargs: Dict[str, Any]) -> str:
+    def format(self, output_json_schema: str, args: List[Any], kwargs: Dict[str, Any]) -> str:
         role_and_context = self._node.find(DefaultCompilationResult.tag_role_and_context).text.strip()
         task_description = self._node.find(DefaultCompilationResult.tag_task_description).text.strip()
         guidelines = self._node.find(DefaultCompilationResult.tag_guidelines).text.strip()
         output = self._node.find(DefaultCompilationResult.tag_output)
-        output_json_schema = output.find(DefaultCompilationResult.tag_output_json_schema).text.strip()
         format_guidance = output.find(DefaultCompilationResult.tag_format_guidance).text.strip()
         return f"""
 <role_and_context>
@@ -94,7 +93,6 @@ class DefaultCompilationResult:
     tag_task_description = "task_description"
     tag_guidelines = "guidelines"
     tag_output = "output"
-    tag_output_json_schema = "output_json_schema"
     tag_format_guidance = "format_guidance"
     tag_user_prompt_template = "user_prompt_template"
     tag_compilation_notes = "compilation_notes"
