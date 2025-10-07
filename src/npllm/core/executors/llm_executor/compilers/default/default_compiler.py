@@ -36,6 +36,7 @@ class DefaultSystemPromptTemplate(SystemPromptTemplate):
 {guidelines}
 </guidelines>
 <output>
+<output_json_schema>
 {output_json_schema}
 </output_json_schema>
 <format_guidance>
@@ -102,20 +103,20 @@ class DefaultCompilationResult:
         response_content = response.choices[0].message.content.strip()
         logger.debug(f"Raw response content from compile-time LLM: {response_content}")
         if response_content.startswith("```xml"):
-            response_content = response_content[len("```xml"):-len("```")]
+            response_content = response_content[len("```xml"):-len("```")].strip()
 
         root = ET.fromstring(response_content)
-        return cls._parse(root)
+        return cls._parse(root, response_content)
 
     @classmethod
     def from_cache_file(cls, cache_file: Path) -> 'DefaultCompilationResult':
         with open(cache_file, "r", encoding='utf-8') as f:
-            root = ET.fromstring(f.read())
-        
-        return cls._parse(root)
+            cache_content = f.read()
+            root = ET.fromstring(cache_content)
+            return cls._parse(root, cache_content)
 
     @classmethod
-    def _parse(cls, root: ET.Element) -> 'DefaultCompilationResult':
+    def _parse(cls, root: ET.Element, response_content: str) -> 'DefaultCompilationResult':
         ET.indent(root, space="  ", level=0)
         system_prompt_node = root.find(cls.tag_system_prompt)
         system_prompt_template = DefaultSystemPromptTemplate(system_prompt_node)
@@ -127,7 +128,7 @@ class DefaultCompilationResult:
         compilation_notes = CompilationNotes(compilation_notes_node)
 
         create_time = float(root.get("create_time")) if root.get("create_time") else time.time()
-        return cls(root, system_prompt_template, user_prompt_template, compilation_notes, create_time)
+        return cls(root, system_prompt_template, user_prompt_template, compilation_notes, create_time, response_content)
 
     def __init__(
         self,
@@ -135,13 +136,15 @@ class DefaultCompilationResult:
         system_prompt_template: DefaultSystemPromptTemplate, 
         user_prompt_template: DefaultUserPromptTemplate, 
         compilation_notes: CompilationNotes,
-        create_time: float
+        create_time: float,
+        response_content: str
     ):
         self.root = root
         self.system_prompt_template = system_prompt_template
         self.user_prompt_template = user_prompt_template
         self.compilation_notes = compilation_notes
         self.create_time = create_time
+        self.response_content = response_content
 
 class CompilationTask:
     def __init__(self, call_site: CallSite, code_context: CodeContext):
@@ -220,7 +223,7 @@ class DefaultCompiler(Compiler):
         cache_filename = call_site.identifier.to_cache_filename()
         path = DefaultCompiler.cache_dir / cache_filename
         with open(path, "w", encoding='utf-8') as f:
-            f.write(ET.tostring(compilation_result.root, encoding='utf-8').decode('utf-8'))
+            f.write(compilation_result.response_content)
 
     async def compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
         if call_site.identifier in self._compilation_result_cache:

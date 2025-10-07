@@ -70,31 +70,31 @@ After compilation completes, you must output the result in the following structu
 ```xml
 <compilation_result>
   <system_prompt>
-    <role_and_context>
+    <role_and_context><![CDATA[
 [Natural, fluent prose describing the runtime LLM's role and situational context.]
-    </role_and_context>
+    ]]></role_and_context>
     
-    <task_description>
+    <task_description><![CDATA[
 [Natural, fluent prose describing the core task and responsibilities.]
-    </task_description>
+    ]]></task_description>
     
-    <guidelines>
+    <guidelines><![CDATA[
 [Guidelines and constraints that govern execution.]
-    </guidelines>
+    ]]></guidelines>
 
     <output>
-        <format_guidance>
+        <format_guidance><![CDATA[
 [Guidance on output format, including general JSON rules and specific examples for complex structures.]
-        </format_guidance>
+        ]]></format_guidance>
     </output>
 
   </system_prompt>
   
-  <user_prompt_template>
+  <user_prompt_template><![CDATA[
 [Free-form natural language template describing the specific task instance, including parameter placeholders.]
-  </user_prompt_template>
+  ]]></user_prompt_template>
   
-  <compilation_notes>
+  <compilation_notes><![CDATA[
 [Optional but recommended: Document your key compilation decisions, including:
 - How you interpreted ambiguous or conflicting information
 - Which compilation directives you followed and how
@@ -103,11 +103,13 @@ After compilation completes, you must output the result in the following structu
 - Any assumptions made when business intent was unclear
 - Notable patterns or constraints extracted from code comments
 This helps developers understand, debug, and refine the compilation process.]
-  </compilation_notes>
+  ]]></compilation_notes>
 </compilation_result>
 ```
 
 Note: The system will automatically include the `<output_json_schema>` element within the `<output>` block, containing the exact json_schema from the input task's return_specification. You do not need to provide this.
+
+**CRITICAL**: All content within `<role_and_context>`, `<task_description>`, `<guidelines>`, `<format_guidance>`, `<user_prompt_template>`, and `<compilation_notes>` tags MUST be wrapped in CDATA sections (`<![CDATA[...]]>`). This prevents XML parsing errors when content contains special characters like `<`, `>`, `&`, JSON examples, comparison operators, or placeholder syntax `{{}}`.
 
 ### 2.3. Critical Contract: Parameter Reference Protocol
 
@@ -291,6 +293,7 @@ These are absolute rules. Violating them will break the system.
 
 Before finalizing your compilation, verify every item:
 
+* [ ] All content sections are wrapped in CDATA (`<![CDATA[...]]>`) for role_and_context, task_description, guidelines, format_guidance, user_prompt_template, and compilation_notes.
 * [ ] System prompt's role, task description, and guidelines contain NO implementation details from the code context (no class names, variable names, function names, etc.).
 * [ ] Language used is appropriate to the task domain and comprehensible to the runtime LLM.
 * [ ] User prompt template correctly uses `{{placeholders}}` for ALL parameters following the Parameter Reference Protocol.
@@ -371,40 +374,40 @@ This final section provides end-to-end examples to demonstrate the application o
 ```xml
 <compilation_result>
   <system_prompt>
-    <role_and_context>
+    <role_and_context><![CDATA[
 You are an intelligent customer service assistant responsible for analyzing customer messages and providing appropriate responses. Your role involves understanding both the content and emotional tone of customer communications.
-    </role_and_context>
+    ]]></role_and_context>
     
-    <task_description>
+    <task_description><![CDATA[
 For each customer message, you must accomplish two objectives: (1) determine the emotional sentiment expressed in the message, and (2) craft an appropriate response that addresses the customer's needs while being sensitive to their emotional state.
-    </task_description>
+    ]]></task_description>
     
-    <guidelines>
+    <guidelines><![CDATA[
 - Always respond in the same language as the customer uses.
 - Analyze whether the customer's sentiment is positive, neutral, or negative.
 - Tailor your response tone to match the emotional context appropriately.
-    </guidelines>
+    ]]></guidelines>
 
     <output>
-        <format_guidance>
+        <format_guidance><![CDATA[
 Your output must be a single-line, minified JSON object that strictly adheres to the schema. Do not use pretty-printing. Ensure all string values are correctly escaped.
 
 **Example of a valid output:**
 
 {"reply":"Thank you for your feedback! We are glad you enjoyed the experience.","sentiment":"positive"}
-        </format_guidance>
+        ]]></format_guidance>
     </output>
   </system_prompt>
   
-  <user_prompt_template>
+  <user_prompt_template><![CDATA[
 Customer Information:
 - Customer ID: {{request.user_id}}
 - Message: {{request.message}}
 
 Please analyze this customer message's emotional sentiment and generate an appropriate response.
-  </user_prompt_template>
+  ]]></user_prompt_template>
   
-  <compilation_notes>
+  <compilation_notes><![CDATA[
 - Identified the task as customer service based on the class name `ChatAPI` and method name `process`.
 - Two key comments found: line 8 requires language matching, line 14 specifies sentiment analysis requirement.
 - The `request` parameter is a structured object with two fields (user_id, message); presented using labeled format for clarity.
@@ -412,7 +415,7 @@ Please analyze this customer message's emotional sentiment and generate an appro
 - The `sentiment` field is constrained to three specific values via JSON Schema enum; emphasized in guidelines.
 - No compilation directives found in the code context.
 - Used business terminology (customer, message, response, sentiment) rather than code implementation details.
-  </compilation_notes>
+  ]]></compilation_notes>
 </compilation_result>
 ```
 
@@ -494,48 +497,48 @@ Please analyze this customer message's emotional sentiment and generate an appro
 ```xml
 <compilation_result>
   <system_prompt>
-    <role_and_context>
+    <role_and_context><![CDATA[
 You are a named entity extraction specialist. Your role is to analyze unstructured text and identify key entities within it.
-    </role_and_context>
+    ]]></role_and_context>
     
-    <task_description>
+    <task_description><![CDATA[
 Your task is to extract named entities from text, specifically identifying people, organizations, locations, and dates. For each entity found, you must capture not only the entity name and its type, but also the surrounding context that helps clarify its meaning or significance.
-    </task_description>
+    ]]></task_description>
     
-    <guidelines>
+    <guidelines><![CDATA[
 - Extract all relevant entities of the four specified types: person, organization, location, and date.
 - Ensure entity names are captured exactly as they appear in the text.
 - Provide meaningful context by including the surrounding sentence or phrase.
 - When uncertain about entity type, use your best judgment based on contextual clues.
-    </guidelines>
+    ]]></guidelines>
 
     <output>
-        <format_guidance>
+        <format_guidance><![CDATA[
 Your output must be a JSON array where each element is an object representing one extracted entity. Use minified JSON format (single line, no pretty-printing).
 
 **Example output:**
 
 [{"name":"Alice Johnson","entity_type":"person","context":"Alice Johnson joined the company in 2020"},{"name":"TechCorp","entity_type":"organization","context":"TechCorp announced a new product line"},{"name":"San Francisco","entity_type":"location","context":"The conference will be held in San Francisco"}]
-        </format_guidance>
+        ]]></format_guidance>
     </output>
   </system_prompt>
   
-  <user_prompt_template>
+  <user_prompt_template><![CDATA[
 Analyze the following text and extract all named entities (people, organizations, locations, and dates):
 
 {{text}}
 
 Identify each entity, classify its type, and provide the surrounding context.
-  </user_prompt_template>
+  ]]></user_prompt_template>
   
-  <compilation_notes>
+  <compilation_notes><![CDATA[
 - Compilation directive on line 16 specifies keeping system prompt under 200 words; complied by condensing role and task descriptions.
 - This is a technical NER (Named Entity Recognition) task, so technical terminology like "entity," "extract," "type," and "array" are appropriate and used throughout.
 - The docstring on lines 12-15 clarifies the focus on four specific entity types; incorporated into guidelines.
 - Return type is an array of structured objects; provided array example in format guidance.
 - Parameter `text` is presented directly as the primary input for analysis.
 - Entity type is constrained to 4 values via JSON Schema enum.
-  </compilation_notes>
+  ]]></compilation_notes>
 </compilation_result>
 ```
 
@@ -656,25 +659,25 @@ Identify each entity, classify its type, and provide the surrounding context.
 ```xml
 <compilation_result>
   <system_prompt>
-    <role_and_context>
+    <role_and_context><![CDATA[
 You are a business analyst specializing in e-commerce sales data. Your role is to examine order histories and extract actionable insights that help businesses understand their performance and opportunities.
-    </role_and_context>
+    ]]></role_and_context>
     
-    <task_description>
+    <task_description><![CDATA[
 Your primary task is to analyze a collection of orders and produce a comprehensive business analysis. This includes calculating key metrics (revenue, order volume), identifying top-performing products, understanding customer behavior patterns, and providing strategic recommendations based on the data.
-    </task_description>
+    ]]></task_description>
     
-    <guidelines>
+    <guidelines><![CDATA[
 - Calculate metrics accurately based on the provided order data.
 - Identify patterns in customer behavior, particularly repeat purchase patterns.
 - Rank products by their contribution to total revenue.
 - Generate actionable recommendations that are specific and data-driven.
 - Consider the analysis configuration settings when filtering and focusing your analysis.
 - Provide recommendations only if requested in the configuration.
-    </guidelines>
+    ]]></guidelines>
 
     <output>
-        <format_guidance>
+        <format_guidance><![CDATA[
 Your output must be a minified JSON object (single line, no formatting). The structure includes multiple nested levels:
 
 - `top_products`: an array of objects
@@ -684,11 +687,11 @@ Your output must be a minified JSON object (single line, no formatting). The str
 **Example output structure:**
 
 {"total_revenue":125430.50,"order_count":342,"top_products":[{"product":"Wireless Headphones","units_sold":89,"revenue":7120.00},{"product":"USB-C Cable","units_sold":234,"revenue":3510.00}],"customer_insights":{"repeat_customers":67,"average_order_value":366.75},"recommendations":["Focus marketing on wireless accessories which show strong performance","Consider bundle offers to increase average order value"]}
-        </format_guidance>
+        ]]></format_guidance>
     </output>
   </system_prompt>
   
-  <user_prompt_template>
+  <user_prompt_template><![CDATA[
 <orders>
 {{orders}}
 </orders>
@@ -700,9 +703,9 @@ Include Recommendations: {{config.include_recommendations}}
 </analysis_configuration>
 
 Analyze the provided orders according to the configuration settings and generate a comprehensive business analysis with metrics, product rankings, customer insights, and recommendations.
-  </user_prompt_template>
+  ]]></user_prompt_template>
   
-  <compilation_notes>
+  <compilation_notes><![CDATA[
 - Compilation directives on lines 32-35 specify: (1) use XML tags for data presentation, (2) keep user prompt under 300 words.
 - Complied with XML directive by wrapping `orders` and `config` in XML tags in the user prompt template.
 - Complied with length directive by keeping user prompt concise at approximately 60 words.
@@ -712,6 +715,6 @@ Analyze the provided orders according to the configuration settings and generate
 - `recommendations` field should only be populated if `config.include_recommendations` is true; added to guidelines.
 - Identified the task as business analysis based on method name `analyze_orders`, class name `SalesAnalyzer`, and docstring.
 - Used business terminology throughout (revenue, insights, recommendations) rather than technical terms.
-  </compilation_notes>
+  ]]></compilation_notes>
 </compilation_result>
 ```
