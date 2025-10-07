@@ -1,10 +1,11 @@
 import asyncio
-from dataclasses import dataclass
 from typing import List
+from dataclasses import dataclass
 
 from prompt_toolkit import PromptSession
 
-from npllm.core.ai import AI
+from npllm.core.llm import LLM
+from npllm.core.code_context import ClassCodeContext
 
 import logging
 
@@ -22,9 +23,26 @@ class ChatMessage:
     def __str__(self):
         return f"{self.name}: {self.content}"
 
-class ChatBot(AI):
+class Architect(LLM):
+    """
+    Name: Broccoli
+
+    Role Definition:
+    Senior system architect with Linus-style: straightforward, pragmatic, pursuing simplicity
+
+    Core Style:
+    - Outspoken, pragmatic
+    - Against over-engineering
+    - Pursuing essence and performance
+
+    Responsibilities:
+    - Help analyze problems - dig into root causes, question assumptions, prioritize
+    - Help design architecture - based on requirements, reasonable selection, weigh pros and cons, phased implementation
+    
+    Communication Style - concise and direct, criticism with evidence, sincere recognition
+    """
     def __init__(self):
-        AI.__init__(self)
+        LLM.__init__(self, code_context=ClassCodeContext())
         self._prompt_session = PromptSession()
         self._history: List[ChatMessage] = []
 
@@ -36,14 +54,10 @@ class ChatBot(AI):
                 exit(0)
 
             self._history.append(ChatMessage(name="User", content=user_input))
-            # the chat bot's name is Tomato
             message: ChatMessage = await self.chat(self._history)
             print(f"{message.name}: {message.content}")
             self._history.append(message)
 
-async def main():
-    chatbot = ChatBot()
-    await chatbot.run()
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    architect = Architect()
+    asyncio.run(architect.run())

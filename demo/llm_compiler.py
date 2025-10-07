@@ -56,12 +56,12 @@ class Program:
     # Top-level statements of the program
     statements: List[Union[Assignment, IfStatement, WhileStatement]]
 
-from npllm.core.llm import LLM
+from npllm.core.ai import AI
 
 
-class LLMCompiler(LLM):
+class LLMCompiler(AI):
     def __init__(self):
-        LLM.__init__(self)
+        AI.__init__(self)
 
     async def compile(self, program: str) -> Program:
         return await self.reason_and_generate(program=program)

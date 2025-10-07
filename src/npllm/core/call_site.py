@@ -1,7 +1,6 @@
 import ast
 import inspect
 import typing
-from pathlib import Path
 from abc import abstractmethod
 from types import FrameType, FunctionType, MethodType, ModuleType
 from typing import Optional, Union, Any, Dict, List, Tuple, Set
@@ -54,6 +53,8 @@ class CallSite(RuntimeContext):
     def create_identifier(cls, caller_frame: FrameType, method_name: str) -> CallSiteIdentifier:
         module_object = get_module_object(caller_frame)
         assert module_object
+        if "ipykernel" in inspect.getfile(caller_frame):
+            return CallSiteIdentifier(inspect.getfile(caller_frame), caller_frame.f_lineno, method_name)
         return CallSiteIdentifier(module_object.__file__, caller_frame.f_lineno, method_name)
 
     @classmethod
@@ -313,6 +314,9 @@ class CallSite(RuntimeContext):
 
     def get_function_source(self, func: Union[FunctionType, MethodType]) -> str:
         return remove_indentation(inspect.getsource(func))
+
+    def in_notebook(self) -> bool:
+        return "ipykernel" in inspect.getfile(self._caller_frame)
 
     @property
     def identifier(self) -> CallSiteIdentifier:

@@ -9,81 +9,49 @@ from litellm import acompletion, ModelResponse
 
 from npllm.core.call_site import CallSite, CallSiteIdentifier
 from npllm.core.code_context import CodeContext
-from npllm.core.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
+from npllm.core.executors.llm_executor.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 class DefaultSystemPromptTemplate(SystemPromptTemplate):
-    def __init__(self, role_and_context: str, task_description: str, guidelines: str):
-        self.role_and_context = role_and_context
-        self.task_description = task_description
-        self.guidelines = guidelines
+    def __init__(self, node: ET.Element):
+        self._node = node
     
-    def format(self, output_json_schema: str, args: List[Any], kwargs: Dict[str, Any]) -> str:
+    def format(self, args: List[Any], kwargs: Dict[str, Any]) -> str:
+        role_and_context = self._node.find(DefaultCompilationResult.tag_role_and_context).text.strip()
+        task_description = self._node.find(DefaultCompilationResult.tag_task_description).text.strip()
+        guidelines = self._node.find(DefaultCompilationResult.tag_guidelines).text.strip()
+        output = self._node.find(DefaultCompilationResult.tag_output)
+        output_json_schema = output.find(DefaultCompilationResult.tag_output_json_schema).text.strip()
+        format_guidance = output.find(DefaultCompilationResult.tag_format_guidance).text.strip()
         return f"""
-<system_prompt>
 <role_and_context>
-{self.role_and_context.strip()}
+{role_and_context}
 </role_and_context>
 <task_description>
-{self.task_description.strip()}
+{task_description}
 </task_description>
 <guidelines>
-{self.guidelines.strip()}
+{guidelines}
 </guidelines>
-<output_format>
-The output should be formatted as a JSON instance that conforms to the JSON schema below.
-
-As an example, for the schema {{"properties": {{"foo": {{"title": "Foo", "description": "a list of strings", "type": "array", "items": {{"type": "string"}}}}}}, "required": ["foo"]}}
-the object {{"foo": ["bar", "baz"]}} is a well-formatted instance of the schema. The object {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
-
-Here is the output schema:
-```
+<output>
 {output_json_schema}
-```
-
-CRITICAL REQUIREMENTS:
-- Output ONLY raw JSON, no explanations or extra text before/after
-- Do NOT use ```json code blocks or any markdown formatting
-- Do NOT add newlines or indentation - output compact single-line JSON
-- All required fields must be present
-- Data types must exactly match the schema
-- String values MUST be enclosed in double quotes "", numeric values must NOT have quotes
-- All special characters in strings MUST be properly escaped: \\" for quotes, \\\\ for backslashes, \\n for newlines, \\t for tabs
-</output_format>
-</system_prompt>
+</output_json_schema>
+<format_guidance>
+{format_guidance}
+</format_guidance>
+</output>
 """.strip()
-
-    def to_xml(self) -> str:
-        return f"""
-<system_prompt>
-<role_and_context>
-{self.role_and_context}
-</role_and_context>
-<task_description>
-{self.task_description}
-</task_description>
-<guidelines>
-{self.guidelines}
-</guidelines>
-</system_prompt>
-""".strip()
+        
 
 class DefaultUserPromptTemplate(UserPromptTemplate):
-    def __init__(self, template: str):
-        self._template = template
-    
-    def to_xml(self) -> str:
-        return f"""
-<user_prompt_template>
-{self._template}
-</user_prompt_template>
-""".strip()
+    def __init__(self, node: ET.Element):
+        self._node = node
 
     def format(self, args: List[Any], kwargs: Dict[str, Any]) -> str:
-        template = self._template
+        template = self._node.text
         placeholders = re.findall(r"{{[^}]+}}", template)
         for original_placeholder in placeholders:
             placeholder = original_placeholder
@@ -105,12 +73,9 @@ class DefaultUserPromptTemplate(UserPromptTemplate):
                 value = getattr(value, field)
 
             formatted_value: List[str] = []
-            if isinstance(value, (list, tuple)):
+            if isinstance(value, list):
                 for item in value:
                     formatted_value.append(str(item))
-            elif isinstance(value, dict):
-                for key, item in value.items():
-                    formatted_value.append(f"{key}: {str(item)}")
             else:
                 formatted_value.append(str(value))
 
@@ -119,15 +84,8 @@ class DefaultUserPromptTemplate(UserPromptTemplate):
         return template.strip()
 
 class CompilationNotes:
-    def __init__(self, notes: str):
-        self.notes = notes
-
-    def to_xml(self) -> str:
-        return f"""
-<compilation_notes>
-{self.notes}
-</compilation_notes>
-""".strip()
+    def __init__(self, node: ET.Element):
+        self._node = node
 
 class DefaultCompilationResult:
     tag_compilation_result = "compilation_result"
@@ -135,6 +93,9 @@ class DefaultCompilationResult:
     tag_role_and_context = "role_and_context"
     tag_task_description = "task_description"
     tag_guidelines = "guidelines"
+    tag_output = "output"
+    tag_output_json_schema = "output_json_schema"
+    tag_format_guidance = "format_guidance"
     tag_user_prompt_template = "user_prompt_template"
     tag_compilation_notes = "compilation_notes"
 
@@ -156,52 +117,33 @@ class DefaultCompilationResult:
         return cls._parse(root)
 
     @classmethod
-    def _get_xml_node_complete_content(cls, node: ET.Element, target_node_tag: str) -> str:
-        target_node = node.find(target_node_tag)
-        if target_node is None:
-            raise RuntimeError(f"Cannot find target node {target_node_tag} in the node {node}")
-        
-        result = ET.tostring(target_node, encoding='utf-8').decode('utf-8').strip()
-        return result.replace(f"<{target_node_tag}>", "").replace(f"</{target_node_tag}>", "").strip()
-
-    @classmethod
     def _parse(cls, root: ET.Element) -> 'DefaultCompilationResult':
+        ET.indent(root, space="  ", level=0)
         system_prompt_node = root.find(cls.tag_system_prompt)
-        role_and_context = cls._get_xml_node_complete_content(system_prompt_node, cls.tag_role_and_context)
-        task_description=cls._get_xml_node_complete_content(system_prompt_node, cls.tag_task_description)
-        guidelines=cls._get_xml_node_complete_content(system_prompt_node, cls.tag_guidelines)
-        system_prompt_template = DefaultSystemPromptTemplate(
-            role_and_context=role_and_context,
-            task_description=task_description,
-            guidelines=guidelines
-        )
-        user_prompt_template = cls._get_xml_node_complete_content(root, cls.tag_user_prompt_template)
-        user_prompt_template = DefaultUserPromptTemplate(user_prompt_template)
-        compilation_notes = cls._get_xml_node_complete_content(root, cls.tag_compilation_notes)
-        compilation_notes = CompilationNotes(compilation_notes)
+        system_prompt_template = DefaultSystemPromptTemplate(system_prompt_node)
+
+        user_prompt_template_node = root.find(cls.tag_user_prompt_template)
+        user_prompt_template = DefaultUserPromptTemplate(user_prompt_template_node)
+
+        compilation_notes_node = root.find(cls.tag_compilation_notes)
+        compilation_notes = CompilationNotes(compilation_notes_node)
+
         create_time = float(root.get("create_time")) if root.get("create_time") else time.time()
-        return cls(system_prompt_template, user_prompt_template, compilation_notes, create_time)
+        return cls(root, system_prompt_template, user_prompt_template, compilation_notes, create_time)
 
     def __init__(
-        self, 
+        self,
+        root: ET.Element,
         system_prompt_template: DefaultSystemPromptTemplate, 
         user_prompt_template: DefaultUserPromptTemplate, 
         compilation_notes: CompilationNotes,
         create_time: float
     ):
+        self.root = root
         self.system_prompt_template = system_prompt_template
         self.user_prompt_template = user_prompt_template
         self.compilation_notes = compilation_notes
         self.create_time = create_time
-
-    def to_xml(self) -> str:
-        return f"""
-<compilation_result create_time="{self.create_time}">
-{self.system_prompt_template.to_xml()}
-{self.user_prompt_template.to_xml()}
-{self.compilation_notes.to_xml()}
-</compilation_result>
-""".strip()
 
 class CompilationTask:
     def __init__(self, call_site: CallSite, code_context: CodeContext):
@@ -220,20 +162,32 @@ class CompilationTask:
         
         return f"""
 <compile_task>
-<code_context>
+  <code_context>
 {code_context}
-</code_context>
-<call_site>
-<line_number>{relative_line_number}</line_number>
-<method_name>{self._call_site.identifier.method_name}</method_name>
-</call_site>
-<positional_parameters>
-{'\n'.join(positional_parameters)}
-</positional_parameters>
-<keyword_parameters>
-{'\n'.join(keyword_parameters)}
-</keyword_parameters>
-<return_type>{self._call_site.return_type}</return_type>
+  </code_context>
+
+  <call_site>
+    <location>
+      <line_number>{relative_line_number}</line_number>
+      <method_name>{self._call_site.identifier.method_name}</method_name>
+    </location>
+
+    <parameter_spec>
+      <positional>
+      {'\n'.join(positional_parameters)}
+      </positional>
+      <keyword>
+      {'\n'.join(keyword_parameters)}
+      </keyword>
+    </parameter_spec>
+    
+    <return_specification>
+      <type>{self._call_site.return_type}</type>
+      <json_schema>
+{self._call_site.return_type.json_schema()}
+      </json_schema>
+    </return_specification>
+  </call_site>
 </compile_task>
 """.strip()
 
@@ -243,7 +197,7 @@ class DefaultCompiler(Compiler):
     def __init__(self, model: str):
         self._model = model
         self._system_prompt_path = (
-            resources.files('npllm.core.compilers.default') / 
+            resources.files('npllm.core.executors.llm_executor.compilers.default') / 
             "system_prompt.md"
         )
         self._system_prompt = self._load_prompt()
@@ -268,7 +222,7 @@ class DefaultCompiler(Compiler):
         cache_filename = call_site.identifier.to_cache_filename()
         path = DefaultCompiler.cache_dir / cache_filename
         with open(path, "w", encoding='utf-8') as f:
-            f.write(compilation_result.to_xml())
+            f.write(ET.tostring(compilation_result.root, encoding='utf-8').decode('utf-8'))
 
     async def compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
         if call_site.identifier in self._compilation_result_cache:

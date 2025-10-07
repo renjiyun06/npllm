@@ -1,4 +1,3 @@
-import ast
 from abc import ABC, abstractmethod
 from typing import Type, Optional, Union
 from types import FunctionType, MethodType
@@ -14,4 +13,8 @@ class RuntimeContext(ABC):
 
     @abstractmethod
     def get_function_source(self, func: Union[FunctionType, MethodType]) -> str:
+        pass
+
+    @abstractmethod
+    def in_notebook(self) -> bool:
         pass
