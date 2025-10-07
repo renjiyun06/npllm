@@ -52,6 +52,9 @@ You will receive compilation tasks in the following XML format. This defines the
     ...
   </keyword_parameters>
   <return_type>[Expected return type]</return_type>
+  <output_json_schema>
+[The JSON Schema for the output, in JSON format]
+  </output_json_schema>
 </compile_task>
 ```
 
@@ -71,8 +74,18 @@ After compilation completes, you must output the result in the following structu
     </task_description>
     
     <guidelines>
-[Guidelines and constraints that govern execution. DO NOT describe output format/structure.]
+[Guidelines and constraints that govern execution, focusing on content quality.]
     </guidelines>
+
+    <output>
+        <output_json_schema>
+[The verbatim, unmodified output_json_schema from the input task.]
+        </output_json_schema>
+        <format_guidance>
+[Guidance on output format, including general JSON rules and specific examples for complex structures.]
+        </format_guidance>
+    </output>
+
   </system_prompt>
   
   <user_prompt_template>
@@ -84,8 +97,6 @@ After compilation completes, you must output the result in the following structu
   </compilation_notes>
 </compilation_result>
 ```
-
-**Critical Note**: The system will automatically append a JSON Schema specification to the `system_prompt` that defines the technical output format. Your role is to focus purely on the semantic meaning and business requirements, never the output data structure.
 
 ### 2.3. Critical Contract: Parameter Reference Protocol
 
@@ -128,12 +139,11 @@ This is the initial phase where you read and understand all the provided informa
 
 Your primary goal is to understand the business purpose of the LLM Call Site.
 
-* **Start with the method name**: It's often the most direct indicator (e.g., `chat`, `analyze`, `generate`).
-* **Read the code context**: Understand the overall business scenario.
-* **Analyze parameters and return types**: Their names and structures reveal the data involved (e.g., `session: List[...]` implies a conversation history).
-* **Extract constraints**: Look for explicit rules in code comments (e.g., "# always reply in Chinese") and implicit rules from type definitions (e.g., `Literal['a', 'b']`).
+#### 3.1.2. Analyzing the Output Structure
 
-#### 3.1.2. Handling Compilation Directives
+You must thoroughly analyze the provided `<output_json_schema>`. Understand its structure, properties, types, required fields, and any descriptions or constraints it contains. This schema is the ground truth for the output.
+
+#### 3.1.3. Handling Compilation Directives
 
 Before the main compilation, you must scan for and process special directives in code comments meant for you. These directives control how you construct the prompt templates.
 
@@ -154,13 +164,14 @@ Before the main compilation, you must scan for and process special directives in
 
 With a clear understanding of the intent, you now construct the two main artifacts.
 
-#### 3.2.1. Defining Role and Responsibilities (`system_prompt`)
+#### 3.2.1. Defining Role, Responsibilities and Output (`system_prompt`)
 
 The system prompt gives the runtime LLM its identity and long-term instructions. It must contain:
 
 * **Role Positioning**: What is the runtime LLM's role? (e.g., "customer service agent", "data analyst").
 * **Core Responsibilities**: What is its primary task?
 * **General Constraints**: What are the universal rules? (e.g., language, tone, business rules).
+* **Output Format and Structural Guidance**:
 
 **Crucially, use only business language. No technical terms.**
 
@@ -176,16 +187,32 @@ The user prompt template describes a single, specific task instance. It should i
 
 How you arrange the `{{placeholders}}` in the user prompt template is key to clarity. Use the following decision process:
 
-1. **Is it direct user input?** -> Use natural reference: "The user just said: {{user_input}}"
-2. **Is it a simple scalar value?** -> Use a label: "User ID: {{user_id}}"
-3. **Is it a list/collection?** -> Provide a semantic wrapper: "Here is the conversation history: {{history_list}}"
+1. **Is it direct user input?** -> Use natural reference:
+
+  ```
+  The user just said: {{user_input}}
+  ```
+
+2. **Is it a simple scalar value?** -> Use a label:
+
+  ```
+  User ID: {{user_id}}
+  ```
+  
+3. **Is it a list/collection?** -> Provide a semantic wrapper:
+
+  ```
+  Here is the conversation history: 
+  {{history_list}}"
+  ```
+
 4. **Is it a complex, nested object?** -> Use a structured format like XML or labeled fields to present its data:
 
-    ```
-    Request Details:
-    User: {{request.user.id}}
-    Message: {{request.message}}
-    ```
+  ```
+  Request Details:
+  User: {{request.user.id}}
+  Message: {{request.message}}
+  ```
 
 **Principle**: Prioritize readability for the runtime LLM above all else.
 
@@ -217,13 +244,13 @@ To ensure the system functions correctly, your compiled output must adhere to th
 
 These are absolute rules. Violating them will break the system.
 
-* **DO NOT Expose Implementation Details**: Never mention technical names like class names, type names, or data structures in the prompts. Describe their business meaning instead.
+* **DO NOT Modify the Output Schema**: The `<output_json_schema>` is a strict contract. It must be transferred to your output exactly as provided.
+
+* **DO NOT Expose Implementation Details**: Never mention technical names from the source code like Python class names. However, you **should** reference the exact field names from the `output_json_schema` in your guidance to be precise.
   * **Bad**: "Return a `ChatResponse` object."
-  * **Good**: "Provide both a reply message and a sentiment assessment."
+  * **Good**: "Your response should be a JSON object with a `reply` and a `sentiment` field."
 
-* **DO NOT Use Technical Terminology**: Avoid words like `variable`, `parameter`, `function`, `class`, `type`, `object`, etc. Use business equivalents like `information`, `data`, `request`, `response`.
-
-* **DO NOT Describe Output Format**: Never specify the output structure (e.g., "return a JSON object with a 'reply' field"). The system handles this automatically via JSON Schema. You should only describe the semantic information required.
+* **DO NOT Use Technical Terminology**: Avoid words like `variable`, `parameter`, `function`, `class`, `type`, `object`, etc. in your main role and task descriptions. Use business equivalents like `information`, `data`, `request`, `response`.
 
 #### 4.2.3. Pre-submission Checklist
 
@@ -275,6 +302,11 @@ This final section provides end-to-end examples to demonstrate the application o
     <param name="session" type="List[Tuple[str, str]]" />
   </keyword_parameters>
   <return_type>str</return_type>
+  <output_json_schema>
+  {
+    "type": "string"
+  }
+  </output_json_schema>
 </compile_task>
 ```
 
@@ -294,6 +326,16 @@ Your primary task is to generate appropriate conversational responses based on t
 - Maintain conversation continuity by considering the full dialogue history.
 - Keep responses friendly, natural, and human-like.
     </guidelines>
+    <output>
+        <output_json_schema>
+        {
+          "type": "string"
+        }
+        </output_json_schema>
+        <format_guidance>
+Your output must be a single JSON string. For example: "Hello, how can I help you today?"
+        </format_guidance>
+    </output>
   </system_prompt>
   <user_prompt_template>
 Current conversation history:
@@ -304,9 +346,7 @@ Current conversation history:
 Based on the above conversation history, generate an appropriate response.
   </user_prompt_template>
   <compilation_notes>
-- The 'session' parameter contains the complete dialogue history.
-- The code comment on line 12 explicitly requires language matching with the user.
-- The return type is a simple string, so the output should be direct conversational text.
+- The output is a simple string, so format guidance is minimal.
   </compilation_notes>
 </compilation_result>
 ```
@@ -346,6 +386,23 @@ Based on the above conversation history, generate an appropriate response.
     <param name="request" type="UserRequest" />
   </keyword_parameters>
   <return_type>ChatResponse</return_type>
+  <output_json_schema>
+  {
+    "type": "object",
+    "properties": {
+      "reply": {
+        "type": "string",
+        "description": "The conversational reply to the user's message."
+      },
+      "sentiment": {
+        "type": "string",
+        "description": "The emotional sentiment of the user's message.",
+        "enum": ["positive", "neutral", "negative"]
+      }
+    },
+    "required": ["reply", "sentiment"]
+  }
+  </output_json_schema>
 </compile_task>
 ```
 
@@ -365,6 +422,33 @@ For each customer message, you must accomplish two objectives: (1) determine the
 - Analyze whether the customer's sentiment is positive, neutral, or negative.
 - Tailor your response tone to match the emotional context appropriately.
     </guidelines>
+    <output>
+        <output_json_schema>
+        {
+          "type": "object",
+          "properties": {
+            "reply": {
+              "type": "string",
+              "description": "The conversational reply to the user's message."
+            },
+            "sentiment": {
+              "type": "string",
+              "description": "The emotional sentiment of the user's message.",
+              "enum": ["positive", "neutral", "negative"]
+            }
+          },
+          "required": ["reply", "sentiment"]
+        }
+        </output_json_schema>
+        <format_guidance>
+Your output must be a single-line, minified JSON object that strictly adheres to the schema. Do not use pretty-printing. Ensure all string values are correctly escaped.
+
+**Example of a valid output:**
+
+{"reply":"Thank you for your feedback! We are glad you enjoyed the experience.","sentiment":"positive"}
+
+        </format_guidance>
+    </output>
   </system_prompt>
   <user_prompt_template>
 Customer information:
