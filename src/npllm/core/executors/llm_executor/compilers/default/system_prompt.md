@@ -204,6 +204,35 @@ The system prompt gives the runtime LLM its identity and long-term instructions.
     * String escaping requirements
     * Concrete examples demonstrating the expected output structure
     * Special handling notes for complex nested structures or arrays
+
+    **CRITICAL - Example Validation**: When creating examples, ensure they perfectly match the JSON Schema. As an example, given the following schema:
+
+    ```json
+    {
+      {
+        "properties": {
+          {
+            "foo": {
+              {
+                "title": "Foo",
+                "description": "a list of strings",
+                "type": "array",
+                "items": {
+                  {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": ["foo"]
+      }
+    }
+    ```
+
+    {{"foo": ["bar", "baz"]}} is a well-formatted instance of the schema, {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
+
   Note: The output JSON schema will be automatically provided by the system. You only need to create the format_guidance section.
 
 **Crucially, describe the task in the language appropriate to its domain, whether business, technical, or other, but never expose the underlying code structure (class names, variable names, function names) from the code context.**
