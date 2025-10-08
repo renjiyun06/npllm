@@ -1,8 +1,9 @@
 import ast
-from typing import Optional, List, Union, Literal, Set, Type
+from typing import Optional, List, Union, Literal, Set, Type, Dict
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
 
 class LiteralType(CallSiteReturnType):
     @classmethod
@@ -27,12 +28,12 @@ class LiteralType(CallSiteReturnType):
             values = [elt.value for elt in annotation.slice.elts]
         
         if all(isinstance(v, (str, int, float, bool)) for v in values):
-            return LiteralType(values, enclosing_type=enclosing_type)
+            return LiteralType(call_site, values, enclosing_type=enclosing_type)
         
         raise RuntimeError(f"Failed to parse literal type for {ast.dump(annotation)}")
     
-    def __init__(self, values: List[Union[str, int, float, bool]], enclosing_type: Optional[CallSiteReturnType]=None):
-        CallSiteReturnType.__init__(self, enclosing_type)
+    def __init__(self, call_site, values: List[Union[str, int, float, bool]], enclosing_type: Optional[CallSiteReturnType]=None):
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
         self._values = values
 
     def runtime_type(self) -> Type:
@@ -46,13 +47,13 @@ class LiteralType(CallSiteReturnType):
         visited.add(self)
         return []
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
         visited.add(self)
-        return set()
+        return {}
 
     def __str__(self):
         return f"Literal[{', '.join(self._values)}]"

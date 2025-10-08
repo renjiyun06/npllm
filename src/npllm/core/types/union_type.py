@@ -1,8 +1,9 @@
 import ast
-from typing import Optional, List, Union, Set, Type
+from typing import Optional, List, Union, Set, Type, Dict
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
 
 import logging
 
@@ -22,12 +23,12 @@ class UnionType(CallSiteReturnType):
             right_type = CallSiteReturnType.from_annotation(annotation.right, call_site, enclosing_type)
             if left_type and right_type:
                 logger.debug(f"UnionType.from_annotation: {ast.dump(annotation)}")
-                return UnionType(types=[left_type, right_type], enclosing_type=enclosing_type)
+                return UnionType(call_site, types=[left_type, right_type], enclosing_type=enclosing_type)
             else:
                 raise RuntimeError(f"Failed to parse union type for {ast.dump(annotation)}")
         elif isinstance(annotation, ast.Subscript) and isinstance(annotation.value, ast.Name) and annotation.value.id in ['Union', 'union']:
             logger.debug(f"UnionType.from_annotation: {ast.dump(annotation)}...")
-            union_type = UnionType(enclosing_type=enclosing_type)
+            union_type = UnionType(call_site, enclosing_type=enclosing_type)
             if not hasattr(annotation.slice, 'elts'):
                 type = CallSiteReturnType.from_annotation(annotation.slice, call_site, union_type)
                 if type:
@@ -49,8 +50,8 @@ class UnionType(CallSiteReturnType):
         else:
             return None
     
-    def __init__(self, types: Optional[List[CallSiteReturnType]]=None, enclosing_type: Optional[CallSiteReturnType]=None):
-        CallSiteReturnType.__init__(self, enclosing_type)
+    def __init__(self, call_site, types: Optional[List[CallSiteReturnType]]=None, enclosing_type: Optional[CallSiteReturnType]=None):
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
         self._types = types
 
     def runtime_type(self) -> Type:
@@ -68,13 +69,13 @@ class UnionType(CallSiteReturnType):
             result.extend(type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
         visited.add(self)
-        dependent_modules = set()
+        dependent_modules = {}
         for type in self._types:
             dependent_modules.update(type.get_dependent_modules(visited))
         return dependent_modules

@@ -2,10 +2,12 @@ import ast
 import json
 import typing
 from abc import ABC, abstractmethod
-from typing import Optional, List, Set
+from typing import Optional, List, Set, Dict, Union
 from types import ModuleType
 
 from pydantic import TypeAdapter
+
+from npllm.core.notebook import Cell
 
 class CallSiteReturnType(ABC):
     @classmethod
@@ -43,7 +45,8 @@ class CallSiteReturnType(ABC):
                 CustomClassType.from_annotation(annotation, call_site, enclosing_type)
             )
     
-    def __init__(self, enclosing_type: Optional['CallSiteReturnType']=None):
+    def __init__(self, call_site, enclosing_type: Optional['CallSiteReturnType']=None):
+        self._call_site = call_site
         self._enclosing_type = enclosing_type
 
     def pydantic_type_adapter(self) -> TypeAdapter:
@@ -57,7 +60,7 @@ class CallSiteReturnType(ABC):
         pass
 
     @abstractmethod
-    def get_dependent_modules(self) -> Set[ModuleType]:
+    def get_dependent_modules(self) -> Dict[str, Union[ModuleType, Cell]]:
         pass
 
     @abstractmethod

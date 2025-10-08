@@ -1,7 +1,9 @@
 import ast
+import hashlib
+import sys
 import inspect
 from types import FrameType, FunctionType, MethodType, ModuleType
-from typing import Optional, Union, Any, List, Tuple, Set, Type
+from typing import Optional, Union, Any, List, Tuple, Set, Type, Dict
 from dataclasses import is_dataclass
 
 from pydantic import BaseModel
@@ -14,26 +16,28 @@ from npllm.core.call_site_contexts.if_ctx import IfCtx
 from npllm.core.call_site_contexts.return_ctx import ReturnCtx
 from npllm.core.call_site_contexts.while_ctx import WhileCtx
 from npllm.utils.source_util import remove_indentation
-from npllm.utils.inspect_util import get_class_from_module, get_module_object, is_module_frame
+from npllm.utils.inspect_util import get_class_from_module, is_module_frame
+from npllm.core.notebook import Notebook, Cell
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 class CallSite:
-    _call_site_cache: Set['CallSite'] = set()
+    _call_site_cache: Dict['CallSite', 'CallSite'] = {}
 
     @classmethod
     def of(cls, caller_frame: FrameType, method_name: str, is_async: bool) -> 'CallSite':
         call_site = cls(caller_frame, method_name, is_async)
-        if call_site in cls._call_site_cache:
-            logger.info(f"{call_site} is already in cache")
+        if not call_site.in_notebook() and call_site in cls._call_site_cache:
+            logger.info(f"Returning cached initialized {call_site}")
+            return CallSite._call_site_cache[call_site]
+        else:
+            logger.info(f"Initializing {call_site}")
+            call_site.initialize()
+            logger.info(f"Initialized {call_site}")
+            cls._call_site_cache[call_site] = call_site
             return call_site
-        
-        logger.info(f"{call_site} is not in cache, initializing...")
-        call_site.initialize()
-        cls._call_site_cache.add(call_site)
-        return call_site
 
     def __init__(
         self,
@@ -43,11 +47,14 @@ class CallSite:
     ):
         self._caller_frame = caller_frame
 
-        self.enclosing_module = get_module_object(self._caller_frame)
-        self.module_filename = None
+        self.enclosing_module: Union[ModuleType, Cell] = None
+        self.module_filename: str = None
         if self.in_notebook():
-            self.module_filename = inspect.getfile(caller_frame)
+            self.enclosing_module = Notebook.current_exec_cell()
+            self.module_filename = self.enclosing_module.fake_module_filename()
         else:
+            module_name = self._caller_frame.f_globals.get('__name__')
+            self.enclosing_module = sys.modules[module_name]
             self.module_filename = self.enclosing_module.__file__
 
         self.line_number = caller_frame.f_lineno
@@ -72,7 +79,7 @@ class CallSite:
         self.positional_parameters: List[Tuple[int, CallSiteReturnType]] = None
         self.keyword_parameters: List[Tuple[str, CallSiteReturnType]] = None
 
-        self.dependent_modules: Set[ModuleType] = None
+        self.dependent_modules: Dict[str, Union[ModuleType, Cell]] = None
 
     def initialize(self):
         self._parse_enclosing_function()
@@ -144,9 +151,9 @@ class CallSite:
         else:
             raise RuntimeError(f"Call site context for {self} is not supported yet")
 
-    def _parse_dependent_modules(self) -> Set[ModuleType]:
-        dependent_modules = set()
-        dependent_modules.add(self.enclosing_module)
+    def _parse_dependent_modules(self):
+        dependent_modules = {}
+        dependent_modules.update({self.module_filename: self.enclosing_module})
         dependent_modules.update(self.return_type.get_dependent_modules())
         for _, arg_type in self.positional_parameters + self.keyword_parameters:
             dependent_modules.update(arg_type.get_dependent_modules())
@@ -273,6 +280,9 @@ class CallSite:
             if isinstance(node, ast.Module):
                 self.enclosing_module_def = node
                 return
+    
+    def get_cls_defining_module(self, cls: Type) -> Optional[Union[ModuleType, Cell]]:
+        return inspect.getmodule(cls)
 
     def get_class(self, class_name: str, enclosing_class: Optional[Type]=None) -> Optional[Type]:
         klass = get_class_from_module(class_name, self.enclosing_module)
@@ -288,8 +298,11 @@ class CallSite:
 
         return None
 
-    def get_module_source(self, module: ModuleType) -> str:
-        return remove_indentation(inspect.getsource(module))
+    def get_module_source(self, module: Union[ModuleType, Cell]) -> str:
+        if isinstance(module, Cell):
+            return module.code
+        else:
+            return inspect.getsource(module)
 
     def get_class_source(self, cls: Type) -> str:
         return remove_indentation(inspect.getsource(cls))

@@ -1,8 +1,9 @@
 import ast
-from typing import Optional, List, Tuple, Set, Type
+from typing import Optional, List, Tuple, Set, Type, Dict, Union
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
 
 import logging
 
@@ -24,7 +25,7 @@ class TupleType(CallSiteReturnType):
             return None
         
         logger.debug(f"TupleType.from_annotation: {ast.dump(annotation)}...")
-        tuple_type = TupleType(enclosing_type=enclosing_type)
+        tuple_type = TupleType(call_site, enclosing_type=enclosing_type)
         item_types = []
         for elt in annotation.slice.elts:
             item_type = CallSiteReturnType.from_annotation(elt, call_site, tuple_type)
@@ -37,8 +38,8 @@ class TupleType(CallSiteReturnType):
         logger.debug(f"TupleType.from_annotation: {ast.dump(annotation)}")
         return tuple_type
 
-    def __init__(self, enclosing_type: Optional[CallSiteReturnType]=None, item_types: Optional[List[CallSiteReturnType]]=None):
-        Type.__init__(self, enclosing_type)
+    def __init__(self, call_site, enclosing_type: Optional[CallSiteReturnType]=None, item_types: Optional[List[CallSiteReturnType]]=None):
+        Type.__init__(self, call_site, enclosing_type)
         self._item_types = item_types or []
 
     def runtime_type(self) -> Type:
@@ -56,13 +57,13 @@ class TupleType(CallSiteReturnType):
             result.extend(item_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
         visited.add(self)
-        dependent_modules = set()
+        dependent_modules = {}
         for item_type in self._item_types:
             dependent_modules.update(item_type.get_dependent_modules(visited))
         return dependent_modules

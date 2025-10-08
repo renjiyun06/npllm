@@ -1,8 +1,9 @@
 import ast
-from typing import Optional, Dict, Set, List, Type
+from typing import Optional, Dict, Set, List, Type, Union
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
 from npllm.core.types.str_type import StrType
 
 import logging
@@ -25,7 +26,7 @@ class DictType(CallSiteReturnType):
             return None
         
         logger.debug(f"DictType.from_annotation: {ast.dump(annotation)}...")
-        dict_type = DictType(enclosing_type=enclosing_type)
+        dict_type = DictType(call_site, enclosing_type=enclosing_type)
         key_type = CallSiteReturnType.from_annotation(annotation.slice.elts[0], call_site, dict_type)
         value_type = CallSiteReturnType.from_annotation(annotation.slice.elts[1], call_site, dict_type)
         if key_type and value_type:
@@ -38,12 +39,13 @@ class DictType(CallSiteReturnType):
         raise RuntimeError(f"Failed to parse dict type for {ast.dump(annotation)}")
 
     def __init__(
-        self, 
+        self,
+        call_site,
         key_type: Optional[CallSiteReturnType]=None, 
         value_type: Optional[CallSiteReturnType]=None,
         enclosing_type: Optional[CallSiteReturnType]=None
     ):
-        CallSiteReturnType.__init__(self, enclosing_type)
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
         self._key_type = key_type
         self._value_type = value_type
 
@@ -61,13 +63,13 @@ class DictType(CallSiteReturnType):
         result.extend(self._value_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
         visited.add(self)
-        dependent_modules = set()
+        dependent_modules = {}
         dependent_modules.update(self._key_type.get_dependent_modules(visited))
         dependent_modules.update(self._value_type.get_dependent_modules(visited))
         return dependent_modules

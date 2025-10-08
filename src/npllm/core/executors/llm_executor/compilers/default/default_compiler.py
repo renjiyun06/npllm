@@ -1,4 +1,3 @@
-import time
 from importlib import resources
 from typing import List, Any, Dict
 import xml.etree.ElementTree as ET
@@ -10,6 +9,7 @@ from litellm import acompletion, ModelResponse
 from npllm.core.call_site import CallSite
 from npllm.core.code_context import CodeContext
 from npllm.core.executors.llm_executor.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
+from npllm.utils.module_util import module_hash
 
 import logging
 
@@ -99,24 +99,36 @@ class DefaultCompilationResult:
     tag_compilation_notes = "compilation_notes"
 
     @classmethod
-    def from_llm_response(cls, response: ModelResponse) -> 'DefaultCompilationResult':
+    def from_llm_response(cls, response: ModelResponse, call_site: CallSite) -> 'DefaultCompilationResult':
         response_content = response.choices[0].message.content.strip()
         logger.debug(f"Raw response content from compile-time LLM: {response_content}")
         if response_content.startswith("```xml"):
             response_content = response_content[len("```xml"):-len("```")].strip()
 
         root = ET.fromstring(response_content)
-        return cls._parse(root, response_content)
+        dependent_modules = call_site.dependent_modules
+        dependent_modules_hash = {}
+        for module_filename, dependent_module in dependent_modules.items():
+            dependent_modules_hash[module_filename] = module_hash(dependent_module)
+        return cls._parse(root, response_content, dependent_modules_hash)
 
     @classmethod
     def from_cache_file(cls, cache_file: Path) -> 'DefaultCompilationResult':
         with open(cache_file, "r", encoding='utf-8') as f:
             cache_content = f.read()
+            splitter_index = cache_content.find("---\n")
+            hash_content = cache_content[:splitter_index].strip()
+            dependent_modules_hash = {}
+            for line in hash_content.split("\n"):
+                module_filename, module_hash = line.split(":")
+                dependent_modules_hash[module_filename] = module_hash
+
+            cache_content = cache_content[splitter_index + len("---\n"):]
             root = ET.fromstring(cache_content)
-            return cls._parse(root, cache_content)
+            return cls._parse(root, cache_content, dependent_modules_hash)
 
     @classmethod
-    def _parse(cls, root: ET.Element, response_content: str) -> 'DefaultCompilationResult':
+    def _parse(cls, root: ET.Element, response_content: str, dependent_modules_hash: Dict[str, str]) -> 'DefaultCompilationResult':
         ET.indent(root, space="  ", level=0)
         system_prompt_node = root.find(cls.tag_system_prompt)
         system_prompt_template = DefaultSystemPromptTemplate(system_prompt_node)
@@ -127,8 +139,7 @@ class DefaultCompilationResult:
         compilation_notes_node = root.find(cls.tag_compilation_notes)
         compilation_notes = CompilationNotes(compilation_notes_node)
 
-        create_time = float(root.get("create_time")) if root.get("create_time") else time.time()
-        return cls(root, system_prompt_template, user_prompt_template, compilation_notes, create_time, response_content)
+        return cls(root, system_prompt_template, user_prompt_template, compilation_notes, response_content, dependent_modules_hash)
 
     def __init__(
         self,
@@ -136,15 +147,15 @@ class DefaultCompilationResult:
         system_prompt_template: DefaultSystemPromptTemplate, 
         user_prompt_template: DefaultUserPromptTemplate, 
         compilation_notes: CompilationNotes,
-        create_time: float,
-        response_content: str
+        response_content: str,
+        dependent_modules_hash: Dict[str, str]
     ):
         self.root = root
         self.system_prompt_template = system_prompt_template
         self.user_prompt_template = user_prompt_template
         self.compilation_notes = compilation_notes
-        self.create_time = create_time
         self.response_content = response_content
+        self.dependent_modules_hash = dependent_modules_hash
 
 class CompilationTask:
     def __init__(self, call_site: CallSite, code_context: CodeContext):
@@ -226,8 +237,16 @@ class DefaultCompiler(Compiler):
         DefaultCompiler.cache_dir.mkdir(parents=True, exist_ok=True)
         cache_filename = self._cache_filename(call_site)
         path = DefaultCompiler.cache_dir / cache_filename
+        
+        cache_file_content = ""
+        dependent_modules = call_site.dependent_modules
+        for module_filename, dependent_module in dependent_modules.items():
+            cache_file_content += f"{module_filename}:{module_hash(dependent_module)}\n"
+        
+        cache_file_content += "---\n"
+        cache_file_content += compilation_result.response_content
         with open(path, "w", encoding='utf-8') as f:
-            f.write(compilation_result.response_content)
+            f.write(cache_file_content)
 
     def _load_prompt(self):
         return self._system_prompt_path.read_text(encoding='utf-8')
@@ -236,11 +255,10 @@ class DefaultCompiler(Compiler):
         compilation_result = self._get_cache(call_site)
         if compilation_result:
             dependent_modules = call_site.dependent_modules
-            for dependent_module in dependent_modules:
-                module_filename = dependent_module.__file__
-                module_last_modified_time = Path(module_filename).stat().st_mtime
-                if module_last_modified_time > compilation_result.create_time:
-                    logger.info(f"Dependent module {dependent_module} for {call_site} has been modified, need to recompile")
+            for module_filename, dependent_module in dependent_modules.items():
+                cached_module_hash = compilation_result.dependent_modules_hash[module_filename]
+                if cached_module_hash is None or cached_module_hash != module_hash(dependent_module):
+                    logger.info(f"Dependent modules of {call_site} have been modified, need to recompile")
                     return await self._do_compile(call_site, code_context)
             
             logger.info(f"No dependent modules have been modified, return cached compilation result for {call_site}")
@@ -262,7 +280,7 @@ class DefaultCompiler(Compiler):
                 model=self._model,
                 messages=messages
             )
-            compilation_result = DefaultCompilationResult.from_llm_response(response)
+            compilation_result = DefaultCompilationResult.from_llm_response(response, call_site)
             logger.info(f"Successfully compiled {call_site}")
             self._save_cache(call_site, compilation_result)
             return CompilationResult(

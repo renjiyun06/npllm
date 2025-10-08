@@ -1,8 +1,9 @@
 import ast
-from typing import Optional, Set, List, Type
+from typing import Optional, Set, List, Type, Dict, Union
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
 
 class FloatType(CallSiteReturnType):
     @classmethod
@@ -13,13 +14,13 @@ class FloatType(CallSiteReturnType):
         enclosing_type: Optional[CallSiteReturnType]=None
     ) -> Optional['FloatType']:
         if isinstance(annotation, ast.Name) and annotation.id == 'float':
-            return FloatType(enclosing_type)
+            return FloatType(call_site, enclosing_type)
         if isinstance(annotation, ast.Constant) and (annotation.value == 'float' or type(annotation.value) == float):
-            return FloatType(enclosing_type)
+            return FloatType(call_site, enclosing_type)
         return None
     
-    def __init__(self, enclosing_type: Optional[CallSiteReturnType]=None):
-        CallSiteReturnType.__init__(self, enclosing_type)
+    def __init__(self, call_site, enclosing_type: Optional[CallSiteReturnType]=None):
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
 
     def runtime_type(self) -> Type:
         return float
@@ -32,13 +33,13 @@ class FloatType(CallSiteReturnType):
         visited.add(self)
         return []
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
         visited.add(self)
-        return set()
+        return {}
 
     def __str__(self):
         return "float"

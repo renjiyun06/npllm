@@ -1,9 +1,10 @@
 import ast
-import inspect
-from typing import Optional, Dict, Set, List, Type
+from typing import Optional, Dict, Set, List, Type, Union
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
+from npllm.utils.module_util import module_path
 
 import logging
 
@@ -70,7 +71,7 @@ class CustomClassType(CallSiteReturnType):
         if not custom_class_source:
             raise RuntimeError(f"Cannot get source of custom class {class_name}")
 
-        custom_class_type = CustomClassType(class_name, custom_class_cls, enclosing_type=enclosing_type)
+        custom_class_type = CustomClassType(call_site, class_name, custom_class_cls, enclosing_type=enclosing_type)
         logger.debug(f"CustomClassType.from_annotation: early created CustomClassType for {class_name} for self referencing")
 
         field_types = {}
@@ -91,13 +92,14 @@ class CustomClassType(CallSiteReturnType):
         raise RuntimeError(f"Failed to parse custom class {class_name}")
 
     def __init__(
-        self, 
+        self,
+        call_site,
         custom_class_name: str, 
         custom_class_cls: Type, 
         field_types: Optional[Dict[str, CallSiteReturnType]]=None,
         enclosing_type: Optional[CallSiteReturnType]=None
     ):
-        CallSiteReturnType.__init__(self, enclosing_type)
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
         self._custom_class_name = custom_class_name
         self._custom_class_cls = custom_class_cls
         self._field_types = field_types or {}
@@ -117,14 +119,17 @@ class CustomClassType(CallSiteReturnType):
             result.extend(field_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
+
         visited.add(self)
-        dependent_modules = set()
-        dependent_modules.add(inspect.getmodule(self._custom_class_cls))
+        dependent_modules = {}
+        defining_module = self._call_site.get_cls_defining_module(self._custom_class_cls)
+        dependent_modules.update({module_path(defining_module): defining_module})
+
         for field_type in self._field_types.values():
             dependent_modules.update(field_type.get_dependent_modules(visited))
         return dependent_modules

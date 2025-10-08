@@ -1,6 +1,6 @@
 import inspect
 import sys
-from types import FrameType, FunctionType, MethodType, ModuleType
+from types import FrameType, MethodType, ModuleType
 from typing import Optional, Type
 
 def is_module_frame(frame: FrameType) -> bool:

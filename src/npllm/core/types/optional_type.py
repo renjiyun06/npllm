@@ -1,8 +1,9 @@
 import ast
-from typing import Optional, Set, List, Type
+from typing import Optional, Set, List, Type, Dict, Union
 from types import ModuleType
 
 from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.notebook import Cell
 
 import logging
 
@@ -24,7 +25,7 @@ class OptionalType(CallSiteReturnType):
             return None
         
         logger.debug(f"OptionalType.from_annotation: {ast.dump(annotation)}...")
-        optional_type = OptionalType(enclosing_type=enclosing_type)
+        optional_type = OptionalType(call_site, enclosing_type=enclosing_type)
         item_type = CallSiteReturnType.from_annotation(annotation.slice, call_site, optional_type)
         if item_type:
             optional_type._item_type = item_type
@@ -32,8 +33,8 @@ class OptionalType(CallSiteReturnType):
             return optional_type
         raise RuntimeError(f"Failed to parse optional type for {ast.dump(annotation)}")
 
-    def __init__(self, item_type: Optional[CallSiteReturnType]=None, enclosing_type: Optional[CallSiteReturnType]=None):
-        CallSiteReturnType.__init__(self, enclosing_type)
+    def __init__(self, call_site, item_type: Optional[CallSiteReturnType]=None, enclosing_type: Optional[CallSiteReturnType]=None):
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
         self._item_type = item_type
 
     def runtime_type(self) -> Type:
@@ -47,11 +48,11 @@ class OptionalType(CallSiteReturnType):
         visited.add(self)
         return self._item_type.get_referenced_custom_classes(visited)
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
-            return set()
+            return {}
         visited.add(self)
         return self._item_type.get_dependent_modules(visited)
 
