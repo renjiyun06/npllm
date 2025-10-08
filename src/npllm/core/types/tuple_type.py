@@ -1,22 +1,20 @@
 import ast
-import typing
-from typing import Optional, List, Tuple, Set
+from typing import Optional, List, Tuple, Set, Type
 from types import ModuleType
 
-from npllm.core.type import Type
-from npllm.core.runtime_context import RuntimeContext
+from npllm.core.call_site_return_type import CallSiteReturnType
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-class TupleType(Type):
+class TupleType(CallSiteReturnType):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.Subscript, 
-        runtime_context: RuntimeContext, 
-        enclosing_type: Type
+        call_site, 
+        enclosing_type: Optional[CallSiteReturnType]=None
     ) -> Optional['TupleType']:
         if (
             not isinstance(annotation, ast.Subscript) or 
@@ -26,10 +24,10 @@ class TupleType(Type):
             return None
         
         logger.debug(f"TupleType.from_annotation: {ast.dump(annotation)}...")
-        tuple_type = TupleType(enclosing_type)
+        tuple_type = TupleType(enclosing_type=enclosing_type)
         item_types = []
         for elt in annotation.slice.elts:
-            item_type = Type.from_annotation(elt, runtime_context, tuple_type)
+            item_type = CallSiteReturnType.from_annotation(elt, call_site, tuple_type)
             if item_type:
                 item_types.append(item_type)
             else:
@@ -39,15 +37,15 @@ class TupleType(Type):
         logger.debug(f"TupleType.from_annotation: {ast.dump(annotation)}")
         return tuple_type
 
-    def __init__(self, enclosing_type: Optional[Type]=None, item_types: Optional[List[Type]]=None):
+    def __init__(self, enclosing_type: Optional[CallSiteReturnType]=None, item_types: Optional[List[CallSiteReturnType]]=None):
         Type.__init__(self, enclosing_type)
         self._item_types = item_types or []
 
-    def runtime_type(self) -> typing.Type:
+    def runtime_type(self) -> Type:
         item_types = [item_type.runtime_type() for item_type in self._item_types]
         return Tuple[*item_types]
 
-    def get_referenced_custom_classes(self, visited: Optional[Set['Type']]=None) -> List[typing.Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[CallSiteReturnType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -58,7 +56,7 @@ class TupleType(Type):
             result.extend(item_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set['Type']]=None) -> Set[ModuleType]:
+    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Set[ModuleType]:
         if visited is None:
             visited = set()
         if self in visited:

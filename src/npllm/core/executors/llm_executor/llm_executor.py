@@ -29,12 +29,12 @@ class LLMExecutor(CallSiteExecutor):
     async def execute(self, call_site: CallSite, args: List[Any], kwargs: Dict[str, Any]) -> Any:
         code_context = self._code_context
         if not call_site.enclosing_function and not call_site.enclosing_class:
-            logger.info(f"Cannot find enclosing function or class at call site {call_site}, use module code context instead")
+            logger.info(f"Cannot find enclosing function or class at {call_site}, use module code context instead")
             code_context = ModuleCodeContext()
 
         compilation_result = await self._compiler.compile(call_site, code_context)
 
-        logger.info(f"Call runtime LLM with model {self._runtime_model} for call site {call_site}")
+        logger.info(f"Call runtime LLM with model {self._runtime_model} for {call_site}")
         system_prompt = compilation_result.system_prompt_template.format(
             output_json_schema=call_site.return_type.json_schema(),
             args=args, 
@@ -84,5 +84,5 @@ class LLMExecutor(CallSiteExecutor):
             json_value = response_content
 
         value = call_site.return_type.pydantic_type_adapter().validate_python(json_value)
-        logger.info(f"Successfully parsed the response from runtime LLM for call site {call_site}")
+        logger.info(f"Successfully parsed the response from runtime LLM for {call_site}")
         return value

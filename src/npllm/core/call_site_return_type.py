@@ -7,16 +7,14 @@ from types import ModuleType
 
 from pydantic import TypeAdapter
 
-from npllm.core.runtime_context import RuntimeContext
-
-class Type(ABC):
+class CallSiteReturnType(ABC):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.AST, 
-        runtime_context: RuntimeContext, 
-        enclosing_type: Optional['Type']=None
-    ) -> 'Type':
+        call_site, 
+        enclosing_type: Optional['CallSiteReturnType']=None
+    ) -> 'CallSiteReturnType':
         from npllm.core.types.str_type import StrType
         from npllm.core.types.int_type import IntType
         from npllm.core.types.float_type import FloatType
@@ -31,21 +29,21 @@ class Type(ABC):
         from npllm.core.types.optional_type import OptionalType
         
         return (
-                StrType.from_annotation(annotation, runtime_context, enclosing_type) or
-                IntType.from_annotation(annotation, runtime_context, enclosing_type) or
-                FloatType.from_annotation(annotation, runtime_context, enclosing_type) or
-                BoolType.from_annotation(annotation, runtime_context, enclosing_type) or
-                AnyType.from_annotation(annotation, runtime_context, enclosing_type) or 
-                ListType.from_annotation(annotation, runtime_context, enclosing_type) or
-                TupleType.from_annotation(annotation, runtime_context, enclosing_type) or
-                DictType.from_annotation(annotation, runtime_context, enclosing_type) or
-                UnionType.from_annotation(annotation, runtime_context, enclosing_type) or
-                LiteralType.from_annotation(annotation, runtime_context, enclosing_type) or
-                OptionalType.from_annotation(annotation, runtime_context, enclosing_type) or 
-                CustomClassType.from_annotation(annotation, runtime_context, enclosing_type)
+                StrType.from_annotation(annotation, call_site, enclosing_type) or
+                IntType.from_annotation(annotation, call_site, enclosing_type) or
+                FloatType.from_annotation(annotation, call_site, enclosing_type) or
+                BoolType.from_annotation(annotation, call_site, enclosing_type) or
+                AnyType.from_annotation(annotation, call_site, enclosing_type) or 
+                ListType.from_annotation(annotation, call_site, enclosing_type) or
+                TupleType.from_annotation(annotation, call_site, enclosing_type) or
+                DictType.from_annotation(annotation, call_site, enclosing_type) or
+                UnionType.from_annotation(annotation, call_site, enclosing_type) or
+                LiteralType.from_annotation(annotation, call_site, enclosing_type) or
+                OptionalType.from_annotation(annotation, call_site, enclosing_type) or 
+                CustomClassType.from_annotation(annotation, call_site, enclosing_type)
             )
     
-    def __init__(self, enclosing_type: Optional['Type']=None):
+    def __init__(self, enclosing_type: Optional['CallSiteReturnType']=None):
         self._enclosing_type = enclosing_type
 
     def pydantic_type_adapter(self) -> TypeAdapter:

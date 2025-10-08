@@ -3,24 +3,23 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Type, Set
 
 from npllm.core.call_site import CallSite
-from npllm.core.runtime_context import RuntimeContext
 from npllm.utils.source_util import add_line_number
 
 class CodeContext(ABC):
     @abstractmethod
-    def get_code_context(self, call_site: CallSite, runtime_context: RuntimeContext) -> Tuple[str, int]:
+    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
         pass
 
 class FunctionCodeContext(CodeContext):
-    def get_code_context(self, call_site: CallSite, runtime_context: RuntimeContext) -> Tuple[str, int]:
+    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
         enclosing_function = call_site.enclosing_function
         if not enclosing_function:
-            raise RuntimeError(f"Cannot find enclosing function at call site {call_site}")
+            raise RuntimeError(f"Cannot find enclosing function at {call_site}")
 
-        enclosing_function_source = runtime_context.get_function_source(enclosing_function)
+        enclosing_function_source = call_site.enclosing_function_source
 
         return_type = call_site.return_type
-        args_types = call_site.args_types
+        args_types = call_site.positional_parameters + call_site.keyword_parameters
 
         referenced_custom_types = []
         referenced_custom_types.extend(return_type.get_referenced_custom_classes())
@@ -33,10 +32,10 @@ class FunctionCodeContext(CodeContext):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, runtime_context.get_class_source(referenced_custom_type)))
+            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)))
 
         code_context = []
-        absolute_line_number = call_site.identifier.line_number
+        absolute_line_number = call_site.line_number
         relative_line_number = absolute_line_number - enclosing_function.__code__.co_firstlineno + 1
         for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:
             code_context.extend(referenced_custom_type_source.splitlines())
@@ -48,16 +47,16 @@ class FunctionCodeContext(CodeContext):
 
 
 class ClassCodeContext(CodeContext):
-    def get_code_context(self, call_site: CallSite, runtime_context: RuntimeContext) -> Tuple[str, int]:
+    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
         enclosing_class = call_site.enclosing_class
         if not enclosing_class:
-            raise RuntimeError(f"Cannot find enclosing class at call site {call_site}")
+            raise RuntimeError(f"Cannot find enclosing class at {call_site}")
 
         _, first_line = inspect.getsourcelines(enclosing_class)
-        enclosing_class_source = runtime_context.get_class_source(enclosing_class)
+        enclosing_class_source = call_site.enclosing_class_source
 
         return_type = call_site.return_type
-        args_types = call_site.args_types
+        args_types = call_site.positional_parameters + call_site.keyword_parameters
 
         referenced_custom_types = []
         referenced_custom_types.extend(return_type.get_referenced_custom_classes())
@@ -70,10 +69,10 @@ class ClassCodeContext(CodeContext):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, runtime_context.get_class_source(referenced_custom_type)))
+            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)))
 
         code_context = []
-        absolute_line_number = call_site.identifier.line_number
+        absolute_line_number = call_site.line_number
         relative_line_number = absolute_line_number - first_line + 1
         for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:
             code_context.extend(referenced_custom_type_source.splitlines())
@@ -85,6 +84,5 @@ class ClassCodeContext(CodeContext):
         return add_line_number(code_context), relative_line_number
 
 class ModuleCodeContext(CodeContext):
-    def get_code_context(self, call_site: CallSite, runtime_context: RuntimeContext) -> Tuple[str, int]:
-        module_source = call_site.get_module_source(call_site.enclosing_module)
-        return add_line_number(module_source.splitlines()), call_site.identifier.line_number
+    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
+        return add_line_number(call_site.enclosing_module_source.splitlines()), call_site.line_number

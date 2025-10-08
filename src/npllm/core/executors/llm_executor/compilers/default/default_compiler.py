@@ -7,7 +7,7 @@ import re
 
 from litellm import acompletion, ModelResponse
 
-from npllm.core.call_site import CallSite, CallSiteIdentifier
+from npllm.core.call_site import CallSite
 from npllm.core.code_context import CodeContext
 from npllm.core.executors.llm_executor.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
 
@@ -152,10 +152,10 @@ class CompilationTask:
         self._code_context = code_context
 
     def __str__(self) -> str:
-        code_context, relative_line_number = self._code_context.get_code_context(self._call_site, self._call_site)
+        code_context, relative_line_number = self._code_context.get_code_context(self._call_site)
         positional_parameters = []
         keyword_parameters = []
-        for arg_name, arg_type in self._call_site.args_types:
+        for arg_name, arg_type in self._call_site.positional_parameters + self._call_site.keyword_parameters:
             if isinstance(arg_name, int):
                 positional_parameters.append(f"""<param position="{arg_name}" type="{arg_type}" />""")
             else:
@@ -170,7 +170,7 @@ class CompilationTask:
   <call_site>
     <location>
       <line_number>{relative_line_number}</line_number>
-      <method_name>{self._call_site.identifier.method_name}</method_name>
+      <method_name>{self._call_site.method_name}</method_name>
     </location>
 
     <parameter_spec>
@@ -202,44 +202,54 @@ class DefaultCompiler(Compiler):
             "system_prompt.md"
         )
         self._system_prompt = self._load_prompt()
-        self._compilation_result_cache: Dict[CallSiteIdentifier, DefaultCompilationResult] = self._load_cache()
+        self._compilation_result_cache: Dict[CallSite, DefaultCompilationResult] = {}
 
-    def _load_cache(self) -> Dict[CallSiteIdentifier, DefaultCompilationResult]:
-        DefaultCompiler.cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_files = DefaultCompiler.cache_dir.glob("*.xml")
-        cache = {}
-        for cache_file in cache_files:
-            call_site_identifier = CallSiteIdentifier.from_cache_filename(cache_file.name)
-            cache[call_site_identifier] = DefaultCompilationResult.from_cache_file(cache_file)
-        return cache
+    def _cache_filename(self, call_site: CallSite) -> str:
+        return f"{call_site.module_filename.replace('/', '__SLASH__')}#{call_site.line_number}#{call_site.method_name}.xml"
 
-    def _load_prompt(self):
-        return self._system_prompt_path.read_text(encoding='utf-8')
+    def _get_cache(self, call_site: CallSite) -> DefaultCompilationResult:
+        if call_site in self._compilation_result_cache:
+            return self._compilation_result_cache[call_site]
+        
+        cache_filename = self._cache_filename(call_site)
+        cache_file = DefaultCompiler.cache_dir / cache_filename
+        if cache_file.exists():
+            compilation_result = DefaultCompilationResult.from_cache_file(cache_file)
+            self._compilation_result_cache[call_site] = compilation_result
+            return compilation_result
+        
+        return None
 
     def _save_cache(self, call_site: CallSite, compilation_result: DefaultCompilationResult):
-        logger.info(f"Save compilation result to cache for call site {call_site}")
-        self._compilation_result_cache[call_site.identifier] = compilation_result
+        logger.info(f"Save compilation result to cache for {call_site}")
+        self._compilation_result_cache[call_site] = compilation_result
         DefaultCompiler.cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_filename = call_site.identifier.to_cache_filename()
+        cache_filename = self._cache_filename(call_site)
         path = DefaultCompiler.cache_dir / cache_filename
         with open(path, "w", encoding='utf-8') as f:
             f.write(compilation_result.response_content)
 
+    def _load_prompt(self):
+        return self._system_prompt_path.read_text(encoding='utf-8')
+
     async def compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
-        if call_site.identifier in self._compilation_result_cache:
-            compilation_result = self._compilation_result_cache[call_site.identifier]
+        compilation_result = self._get_cache(call_site)
+        if compilation_result:
             dependent_modules = call_site.dependent_modules
             for dependent_module in dependent_modules:
                 module_filename = dependent_module.__file__
                 module_last_modified_time = Path(module_filename).stat().st_mtime
                 if module_last_modified_time > compilation_result.create_time:
-                    logger.info(f"Dependent module {dependent_module} has been modified, need to recompile")
-                    break
-            else:
-                logger.info(f"No dependent modules have been modified, return cached compilation result for {call_site}")
-                return compilation_result
+                    logger.info(f"Dependent module {dependent_module} for {call_site} has been modified, need to recompile")
+                    return await self._do_compile(call_site, code_context)
+            
+            logger.info(f"No dependent modules have been modified, return cached compilation result for {call_site}")
+            return compilation_result
+        
+        return await self._do_compile(call_site, code_context)
 
-        logger.info(f"Compile the call site {call_site} with model {self._model}")
+    async def _do_compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
+        logger.info(f"Compile {call_site} with model {self._model}")
         task = CompilationTask(call_site, code_context)
         logger.debug(f"Compilation task: {task}")
         messages = [
@@ -253,7 +263,7 @@ class DefaultCompiler(Compiler):
                 messages=messages
             )
             compilation_result = DefaultCompilationResult.from_llm_response(response)
-            logger.info(f"Successfully compiled the call site {call_site}")
+            logger.info(f"Successfully compiled {call_site}")
             self._save_cache(call_site, compilation_result)
             return CompilationResult(
                 system_prompt_template=compilation_result.system_prompt_template,
