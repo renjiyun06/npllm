@@ -1593,6 +1593,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "prompt-toolkit" },
     { name = "pydantic" },
+    { name = "rich" },
 ]
 
 [package.metadata]
@@ -1604,6 +1605,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.16.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.11.9" },
+    { name = "rich", specifier = ">=14.1.0" },
 ]
 
 [package.metadata.requires-dev]

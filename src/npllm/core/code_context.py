@@ -85,4 +85,27 @@ class ClassCodeContext(CodeContext):
 
 class ModuleCodeContext(CodeContext):
     def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
-        return add_line_number(call_site.enclosing_module_source.splitlines()), call_site.line_number
+        return_type = call_site.return_type
+        args_types = call_site.positional_parameters + call_site.keyword_parameters
+
+        referenced_custom_types = []
+        referenced_custom_types.extend(return_type.get_referenced_custom_classes())
+        for _, arg_type in args_types:
+            referenced_custom_types.extend(arg_type.get_referenced_custom_classes())
+
+        visited: Set[Type] = set()
+        referenced_custom_types_sources: List[Tuple[Type, str]] = []
+        for referenced_custom_type in referenced_custom_types:
+            if referenced_custom_type in visited:
+                continue
+            visited.add(referenced_custom_type)
+            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)))
+
+        code_context = []
+        for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:
+            code_context.extend(referenced_custom_type_source.splitlines())
+            code_context.append("")
+        
+        relative_line_number = call_site.line_number + len(code_context)
+        code_context.extend(call_site.enclosing_module_source.splitlines())
+        return add_line_number(code_context), relative_line_number

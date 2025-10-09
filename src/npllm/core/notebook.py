@@ -13,6 +13,8 @@ class Cell:
     id: str
     code: str
     code_hash: str
+    index: int
+    notebook: 'Notebook'
 
     def fake_module_filename(self) -> str:
         return f"{self.path}#{self.id}"
@@ -36,12 +38,12 @@ class Notebook:
         with open(self.path, "r", encoding="utf-8") as f:
             notebook_data = json.load(f)
             cells = []
-            for cell in notebook_data["cells"]:
+            for index, cell in enumerate(notebook_data["cells"]):
                 if cell["cell_type"] == "code":
                     id = cell["id"]
                     code = "".join(cell["source"]).rstrip("\n")
                     code_hash = hashlib.md5(code.encode(encoding="utf-8")).hexdigest()
-                    cells.append(Cell(self.path, id, code, code_hash))
+                    cells.append(Cell(self.path, id, code, code_hash, index, self))
             return cells
 
     def find_cell_by_id(self, id: str) -> Optional[Cell]:

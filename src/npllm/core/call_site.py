@@ -206,25 +206,30 @@ class CallSite:
                 if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Attribute):
                     if f"{node.target.value.id}.{node.target.attr}" == var_name:
                         return node
-        else:
-            # find annotated declaration node in the enclosing function
-            enclosing_function_def = self._get_enclosing_function_def()
-            if not enclosing_function_def:
-                return None
-            
-            for node in ast.walk(enclosing_function_def):
+
+        if self.enclosing_function_def:
+            for node in ast.walk(self.enclosing_function_def):
                 if isinstance(node, ast.AnnAssign) and node.target.id == var_name:
                     return node
 
-            for arg in enclosing_function_def.args.args:
+            # TODO need to check whether the arg's type is given
+            for arg in self.enclosing_function_def.args.args:
                 if arg.arg == var_name:
                     return arg
 
-            # find annotated declaration node in the enclosing module
+        if self.in_notebook():
+            cells = Notebook.current().cells
+            current_cell = self.enclosing_module
+            for cell in reversed(cells):
+                if cell.index <= current_cell.index:
+                    for node in ast.walk(ast.parse(cell.code)):
+                        if isinstance(node, ast.AnnAssign) and node.target.id == var_name:
+                            return node
+        else:
             for node in ast.walk(ast.parse(self.get_module_source(self.enclosing_module))):
                 if isinstance(node, ast.AnnAssign) and node.target.id == var_name:
                     return node
-
+        
         return None
 
     def _parse_enclosing_function(self):
