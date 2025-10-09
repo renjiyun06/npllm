@@ -1,7 +1,8 @@
 import hashlib
 import json
+import ast
 from dataclasses import dataclass
-from typing import List
+from typing import List, Type, Optional
 
 from IPython import get_ipython
 import ipynbname
@@ -18,9 +19,13 @@ class Cell:
 
 class Notebook:
     @classmethod
-    def current_exec_cell(cls) -> Cell:
+    def current(cls) -> 'Notebook':
         path = ipynbname.path()
-        notebook = Notebook(path)
+        return Notebook(path)
+
+    @classmethod
+    def current_exec_cell(cls) -> Cell:
+        notebook = Notebook.current()
         return notebook.find_cell_by_code(get_ipython().history_manager.input_hist_raw[-1])
 
     def __init__(self, path: str):
@@ -39,6 +44,13 @@ class Notebook:
                     cells.append(Cell(self.path, id, code, code_hash))
             return cells
 
+    def find_cell_by_id(self, id: str) -> Optional[Cell]:
+        for cell in self.cells:
+            if cell.id == id:
+                return cell
+        
+        return None
+
     def find_cell_by_code(self, code: str) -> Cell:
         result = []
         for cell in self.cells:
@@ -51,7 +63,19 @@ class Notebook:
             return result[0]
         else:
             raise RuntimeError(f"Found multiple cells with the same code: {code}")
-            
+
+    def find_class_source(self, cls: Type) -> Optional[str]:
+        for cell in self.cells:
+            cell_source = cell.code
+            tree = ast.parse(cell_source)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef) and node.name == cls.__name__:
+                    cls.__notebook_cell_id__ = cell.id
+                    return ast.unparse(node)
+
+        return None
+
+
     def __hash__(self) -> int:
         return hash(self.path)
 

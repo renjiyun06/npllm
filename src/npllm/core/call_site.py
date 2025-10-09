@@ -282,12 +282,19 @@ class CallSite:
                 return
     
     def get_cls_defining_module(self, cls: Type) -> Optional[Union[ModuleType, Cell]]:
-        return inspect.getmodule(cls)
+        if hasattr(cls, '__notebook_cell_id__'):
+            return Notebook.current().find_cell_by_id(cls.__notebook_cell_id__)
+        else:
+            return inspect.getmodule(cls)
 
     def get_class(self, class_name: str, enclosing_class: Optional[Type]=None) -> Optional[Type]:
-        klass = get_class_from_module(class_name, self.enclosing_module)
-        if klass and (is_dataclass(klass) or issubclass(klass, BaseModel)):
-            return klass
+        klass = None
+        if class_name in self._caller_frame.f_globals:
+            klass = self._caller_frame.f_globals[class_name]
+            if inspect.isclass(klass) and (is_dataclass(klass) or issubclass(klass, BaseModel)):
+                if self.in_notebook():
+                    klass.__in_notebook__ = True
+                return klass
 
         if enclosing_class:
             enclosing_class_module = inspect.getmodule(enclosing_class)
@@ -305,7 +312,10 @@ class CallSite:
             return inspect.getsource(module)
 
     def get_class_source(self, cls: Type) -> str:
-        return remove_indentation(inspect.getsource(cls))
+        if hasattr(cls, '__in_notebook__'):
+            return Notebook.current().find_class_source(cls)
+        else:
+            return remove_indentation(inspect.getsource(cls))
 
     def get_function_source(self, func: Union[FunctionType, MethodType]) -> str:
         return remove_indentation(inspect.getsource(func))
