@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Any, Dict
 
 from npllm.core.call_site import CallSite
-from npllm.core.code_context import CodeContext
+from npllm.core.code_context_provider import CodeContextProvider
 
 class SystemPromptTemplate(ABC):
     @abstractmethod
@@ -22,5 +22,5 @@ class CompilationResult:
 
 class Compiler(ABC):
     @abstractmethod
-    async def compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
+    async def compile(self, call_site: CallSite, code_context_provider: CodeContextProvider) -> CompilationResult:
         pass

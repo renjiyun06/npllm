@@ -27,9 +27,9 @@ class CallSite:
     _call_site_cache: Dict['CallSite', 'CallSite'] = {}
 
     @classmethod
-    def of(cls, caller_frame: FrameType, method_name: str, is_async: bool) -> 'CallSite':
+    def of(cls, caller_frame: FrameType, method_name: str, is_async: bool, debug=False) -> 'CallSite':
         call_site = cls(caller_frame, method_name, is_async)
-        if not call_site.in_notebook() and call_site in cls._call_site_cache:
+        if not call_site.in_notebook() and call_site in cls._call_site_cache and not debug:
             logger.info(f"Returning cached initialized {call_site}")
             return CallSite._call_site_cache[call_site]
         else:

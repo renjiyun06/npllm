@@ -28,7 +28,7 @@ class AI:
             raise RuntimeError("Cannot find caller frame outside LLM class")
         
         async def ai_method_handler(*args, **kwargs) -> Any:
-            call_site = CallSite.of(caller_frame(), method_name, kwargs['__is_async__'])
+            call_site = CallSite.of(caller_frame(), method_name, kwargs['__is_async__'], debug=True)
             return await self._call_site_executor.execute(call_site, args, kwargs)
         
         def ai_method_handler_sync(*args, **kwargs) -> Any:

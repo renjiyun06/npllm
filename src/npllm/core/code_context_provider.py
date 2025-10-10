@@ -1,17 +1,23 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Type, Set
+from typing import List, Type, Set, Tuple
+from dataclasses import dataclass
 
 from npllm.core.call_site import CallSite
 from npllm.utils.source_util import add_line_number
 
-class CodeContext(ABC):
+@dataclass
+class CodeContext:
+    source: str
+    call_site_line: int
+
+class CodeContextProvider(ABC):
     @abstractmethod
-    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
+    def get_code_context(self, call_site: CallSite) -> CodeContext:
         pass
 
-class FunctionCodeContext(CodeContext):
-    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
+class FunctionCodeContextProvider(CodeContextProvider):
+    def get_code_context(self, call_site: CallSite) -> CodeContext:
         enclosing_function = call_site.enclosing_function
         if not enclosing_function:
             raise RuntimeError(f"Cannot find enclosing function at {call_site}")
@@ -43,11 +49,11 @@ class FunctionCodeContext(CodeContext):
         
         relative_line_number = relative_line_number + len(code_context)
         code_context.extend(enclosing_function_source.splitlines())
-        return add_line_number(code_context), relative_line_number
+        return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
 
 
-class ClassCodeContext(CodeContext):
-    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
+class ClassCodeContextProvider(CodeContextProvider):
+    def get_code_context(self, call_site: CallSite) -> CodeContext:
         enclosing_class = call_site.enclosing_class
         if not enclosing_class:
             raise RuntimeError(f"Cannot find enclosing class at {call_site}")
@@ -81,10 +87,10 @@ class ClassCodeContext(CodeContext):
         relative_line_number = relative_line_number + len(code_context)
         code_context.extend(enclosing_class_source.splitlines())
 
-        return add_line_number(code_context), relative_line_number
+        return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
 
-class ModuleCodeContext(CodeContext):
-    def get_code_context(self, call_site: CallSite) -> Tuple[str, int]:
+class ModuleCodeContextProvider(CodeContextProvider):
+    def get_code_context(self, call_site: CallSite) -> CodeContext:
         return_type = call_site.return_type
         args_types = call_site.positional_parameters + call_site.keyword_parameters
 
@@ -108,4 +114,4 @@ class ModuleCodeContext(CodeContext):
         
         relative_line_number = call_site.line_number + len(code_context)
         code_context.extend(call_site.enclosing_module_source.splitlines())
-        return add_line_number(code_context), relative_line_number
+        return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)

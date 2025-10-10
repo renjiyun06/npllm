@@ -7,7 +7,7 @@ import re
 from litellm import acompletion, ModelResponse
 
 from npllm.core.call_site import CallSite
-from npllm.core.code_context import CodeContext
+from npllm.core.code_context_provider import CodeContextProvider
 from npllm.core.executors.llm_executor.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
 from npllm.utils.module_util import module_hash
 
@@ -158,12 +158,12 @@ class DefaultCompilationResult:
         self.dependent_modules_hash = dependent_modules_hash
 
 class CompilationTask:
-    def __init__(self, call_site: CallSite, code_context: CodeContext):
+    def __init__(self, call_site: CallSite, code_context_provider: CodeContextProvider):
         self._call_site = call_site
-        self._code_context = code_context
+        self._code_context_provider = code_context_provider
 
     def __str__(self) -> str:
-        code_context, relative_line_number = self._code_context.get_code_context(self._call_site)
+        code_context = self._code_context_provider.get_code_context(self._call_site)
         positional_parameters = []
         keyword_parameters = []
         for arg_name, arg_type in self._call_site.positional_parameters + self._call_site.keyword_parameters:
@@ -175,21 +175,21 @@ class CompilationTask:
         return f"""
 <compile_task>
   <code_context>
-{code_context}
+{code_context.source}
   </code_context>
 
   <call_site>
     <location>
-      <line_number>{relative_line_number}</line_number>
+      <line_number>{code_context.call_site_line}</line_number>
       <method_name>{self._call_site.method_name}</method_name>
     </location>
 
     <parameter_spec>
       <positional>
-      {'\n'.join(positional_parameters)}
+{'\n'.join(positional_parameters)}
       </positional>
       <keyword>
-      {'\n'.join(keyword_parameters)}
+{'\n'.join(keyword_parameters)}
       </keyword>
     </parameter_spec>
     
@@ -251,7 +251,7 @@ class DefaultCompiler(Compiler):
     def _load_prompt(self):
         return self._system_prompt_path.read_text(encoding='utf-8')
 
-    async def compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
+    async def compile(self, call_site: CallSite, code_context_provider: CodeContextProvider) -> CompilationResult:
         compilation_result = self._get_cache(call_site)
         if compilation_result:
             dependent_modules = call_site.dependent_modules
@@ -259,16 +259,16 @@ class DefaultCompiler(Compiler):
                 cached_module_hash = compilation_result.dependent_modules_hash[module_filename]
                 if cached_module_hash is None or cached_module_hash != module_hash(dependent_module):
                     logger.info(f"Dependent modules of {call_site} have been modified, need to recompile")
-                    return await self._do_compile(call_site, code_context)
+                    return await self._do_compile(call_site, code_context_provider)
             
             logger.info(f"No dependent modules have been modified, return cached compilation result for {call_site}")
             return compilation_result
         
-        return await self._do_compile(call_site, code_context)
+        return await self._do_compile(call_site, code_context_provider)
 
-    async def _do_compile(self, call_site: CallSite, code_context: CodeContext) -> CompilationResult:
+    async def _do_compile(self, call_site: CallSite, code_context_provider: CodeContextProvider) -> CompilationResult:
         logger.info(f"Compile {call_site} with model {self._model}")
-        task = CompilationTask(call_site, code_context)
+        task = CompilationTask(call_site, code_context_provider)
         logger.debug(f"Compilation task: {task}")
         messages = [
             {"role": "system", "content": self._system_prompt},
