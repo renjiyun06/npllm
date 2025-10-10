@@ -16,6 +16,7 @@ dependencies = [
     "jupyterlab>=4.4.9",
     "ipynbname>=2025.8.0.0",
     "rich>=14.1.0",
+    "langsmith>=0.4.34",
 ]
 
 [build-system]

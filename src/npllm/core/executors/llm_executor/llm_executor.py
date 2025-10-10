@@ -1,6 +1,7 @@
 import json
 from typing import Any, List, Dict
 
+import litellm
 from litellm import acompletion
 import json_repair
 
@@ -13,6 +14,8 @@ from npllm.core.executors.llm_executor.compilers.default.default_compiler import
 import logging
 
 logger = logging.getLogger(__name__)
+
+litellm.callbacks = ["langsmith"]
 
 class LLMExecutor(CallSiteExecutor):
     def __init__(
@@ -66,7 +69,11 @@ class LLMExecutor(CallSiteExecutor):
         
         response = await acompletion(
             model=self._runtime_model,
-            messages=messages
+            messages=messages,
+            metadata={
+                "run_name": "llm-executor-execute",
+                "project_name": "npllm"
+            }
         )
 
         response_content = response.choices[0].message.content.strip()

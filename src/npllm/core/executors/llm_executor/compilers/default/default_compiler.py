@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 import re
 
+import litellm
 from litellm import acompletion, ModelResponse
 
 from npllm.core.call_site import CallSite
@@ -14,6 +15,8 @@ from npllm.utils.module_util import module_hash
 import logging
 
 logger = logging.getLogger(__name__)
+
+litellm.callbacks = ["langsmith"]
 
 class DefaultSystemPromptTemplate(SystemPromptTemplate):
     def __init__(self, node: ET.Element):
@@ -278,7 +281,11 @@ class DefaultCompiler(Compiler):
         try:
             response = await acompletion(
                 model=self._model,
-                messages=messages
+                messages=messages,
+                metadata={
+                    "run_name": "default-compiler-compile",
+                    "project_name": "npllm"
+                }
             )
             compilation_result = DefaultCompilationResult.from_llm_response(response, call_site)
             logger.info(f"Successfully compiled {call_site}")
