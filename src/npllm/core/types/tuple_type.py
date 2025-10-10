@@ -39,7 +39,7 @@ class TupleType(CallSiteReturnType):
         return tuple_type
 
     def __init__(self, call_site, enclosing_type: Optional[CallSiteReturnType]=None, item_types: Optional[List[CallSiteReturnType]]=None):
-        Type.__init__(self, call_site, enclosing_type)
+        CallSiteReturnType.__init__(self, call_site, enclosing_type)
         self._item_types = item_types or []
 
     def runtime_type(self) -> Type:
@@ -69,4 +69,4 @@ class TupleType(CallSiteReturnType):
         return dependent_modules
 
     def __str__(self):
-        return f"Tuple[{', '.join(self._item_types)}]"
+        return f"Tuple[{', '.join([str(item_type) for item_type in self._item_types])}]"

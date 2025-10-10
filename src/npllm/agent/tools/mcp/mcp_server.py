@@ -1,15 +1,21 @@
 from typing import Dict, Any, Union, Optional, List
 from dataclasses import dataclass
 
-from mcp import StdioServerParameters, ClientSession
+from mcp import StdioServerParameters, ClientSession, ListToolsResult
 from mcp.client.stdio import stdio_client
+from mcp.types import CallToolResult
 
 @dataclass
 class Tool:
     name: str
-    description: Optional[str]=None
+    description: Optional[str]
     input_schema: Dict[str, Any]
-    output_schema: Optional[Dict[str, Any]]=None
+    output_schema: Optional[Dict[str, Any]]
+
+@dataclass
+class ToolResult:
+    content: Any
+    is_error: bool
 
 class McpServer:
     def __init__(
@@ -30,7 +36,7 @@ class McpServer:
             return server_parameters
         return StdioServerParameters(**server_parameters)
 
-    async def _connect(self):
+    async def connect(self):
         stdio_context = stdio_client(self._server_parameters)
         read_stream, write_stream = await stdio_context.__aenter__()
         client_session = ClientSession(read_stream, write_stream)
@@ -39,19 +45,29 @@ class McpServer:
         self._client_session = client_session
         self._stdio_context = stdio_context
 
-    async def _disconnect(self):
+    async def disconnect(self):
         await self._client_session.__aexit__(None, None, None)
         await self._stdio_context.__aexit__(None, None, None)
 
     async def list_tools(self) -> List[Tool]:
-        return [Tool(**tool) for tool in await self._client_session.list_tools()]
+        list_tool_result: ListToolsResult = await self._client_session.list_tools()
+        tools: List[Tool] = []
+        for tool in list_tool_result.tools:
+            tools.append(Tool(
+                name = tool.name,
+                description = tool.description,
+                input_schema = tool.inputSchema,
+                output_schema = tool.outputSchema
+            ))
+        return tools
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]):
-        return await self._client_session.call_tool(name, arguments)
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> ToolResult:
+        call_tool_result: CallToolResult = await self._client_session.call_tool(name, arguments)
+        return ToolResult(content=call_tool_result.content, is_error=call_tool_result.isError)
 
     async def __aenter__(self):
-        await self._connect()
+        await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        await self._disconnect()
+        await self.disconnect()
