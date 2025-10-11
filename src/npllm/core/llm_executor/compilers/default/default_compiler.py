@@ -9,7 +9,7 @@ from litellm import acompletion, ModelResponse
 
 from npllm.core.call_site import CallSite
 from npllm.core.code_context_provider import CodeContextProvider
-from npllm.core.executors.llm_executor.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
+from npllm.core.llm_executor.compiler import Compiler, CompilationResult, SystemPromptTemplate, UserPromptTemplate
 from npllm.utils.module_util import module_hash
 
 import logging
@@ -212,7 +212,7 @@ class DefaultCompiler(Compiler):
     def __init__(self, model: str):
         self._model = model
         self._system_prompt_path = (
-            resources.files('npllm.core.executors.llm_executor.compilers.default') / 
+            resources.files('npllm.core.llm_executor.compilers.default') / 
             "system_prompt.md"
         )
         self._system_prompt = self._load_prompt()

@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Tuple, Optional
 
+from pydantic import TypeAdapter
+
 from npllm.core.ai import AI
 from npllm.core.executors.agent_executor import ExecutableAgent, Task, OutputSpec
 from npllm.agent.tools.mcp.mcp_server import McpServer, Tool, ToolResult
@@ -26,7 +28,7 @@ class WebContentExtractor(AI, ExecutableAgent):
     def introduce_yourself(self) -> str:
         return "A web content extractor"
 
-    async def execute(self, task: Task, output_spec: OutputSpec) -> Any:
+    async def execute(self, task: Task, output_spec: OutputSpec, output_type_adapter: TypeAdapter) -> Any:
         async with self._mcp_server as mcp_server:
             tools: List[Tool] = await mcp_server.list_tools()
             tool_results: List[ToolResult] = []
@@ -37,4 +39,6 @@ class WebContentExtractor(AI, ExecutableAgent):
                 tool_result: ToolResult = await mcp_server.call_tool(tool_name_and_args[0], tool_name_and_args[1])
                 tool_results.append(tool_result)
             
-            return await self.reason(task, tool_results, output_spec)
+            # the output must strictly follow the output specification
+            output: Any = await self.reason(task, tool_results, output_spec)
+            return output_type_adapter.validate_python(output)

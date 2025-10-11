@@ -2,6 +2,13 @@ from dataclasses import dataclass
 
 from npllm.core.ai import AI
 
+import logging
+
+logging.basicConfig(level=logging.WARNING, format='%(name)s - %(levelname)s - %(message)s')
+
+npllm_logger = logging.getLogger('npllm')
+npllm_logger.setLevel(logging.DEBUG)
+
 @dataclass
 class Address:
     street: str

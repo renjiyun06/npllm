@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, List, Dict
 from dataclasses import dataclass
 
+from pydantic import TypeAdapter
+
 from npllm.core.ai import AI
 from npllm.core.call_site import CallSite
 from npllm.core.call_site_executor import CallSiteExecutor
@@ -12,14 +14,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 @dataclass
-class Task:
-    title: str
-    description: str
-
-@dataclass
 class OutputSpec:
     json_schema: str
     format_guidance: str
+
+@dataclass
+class Task:
+    title: str
+    description: str
 
 class ExecutableAgent(ABC):
     def __init__(self, agent_id: str):
@@ -30,7 +32,7 @@ class ExecutableAgent(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, task: Task, output_spec: OutputSpec) -> Any:
+    async def execute(self, task: Task, output_spec: OutputSpec, output_type_adapter: TypeAdapter) -> Any:
         pass
 
 class DefaultAgent(AI, ExecutableAgent):
@@ -78,4 +80,4 @@ class AgentExecutor(AI, CallSiteExecutor):
             json_schema=call_site.return_type.json_schema(),
             format_guidance=""
         )
-        return await self._agent_registry[target_agent_id].execute(task, output_spec)
+        return await self._agent_registry[target_agent_id].execute(task, output_spec, call_site.return_type.pydantic_type_adapter())

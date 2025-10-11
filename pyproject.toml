@@ -28,7 +28,14 @@ packages = ["src/npllm"]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.2",
 ]
 
 [tool.pytest.ini_options]
 filterwarnings = []
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --strict-markers"
+
+[project.scripts]
+test = "pytest:main"

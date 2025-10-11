@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 from npllm.core.call_site import CallSite
 from npllm.core.call_site_executor import CallSiteExecutor
-from npllm.core.executors.llm_executor.llm_executor import LLMExecutor
+from npllm.core.llm_executor.llm_executor import LLMExecutor
 
 import logging
 
