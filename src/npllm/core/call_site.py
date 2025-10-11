@@ -1,5 +1,4 @@
 import ast
-import hashlib
 import sys
 import inspect
 from types import FrameType, FunctionType, MethodType, ModuleType
@@ -226,7 +225,7 @@ class CallSite:
                         if isinstance(node, ast.AnnAssign) and node.target.id == var_name:
                             return node
         else:
-            for node in ast.walk(ast.parse(self.get_module_source(self.enclosing_module))):
+            for node in ast.walk(ast.parse(self.enclosing_module_source)):
                 if isinstance(node, ast.AnnAssign) and node.target.id == var_name:
                     return node
         
@@ -261,7 +260,7 @@ class CallSite:
 
     def _parse_enclosing_class_source(self):
         if self.enclosing_class:
-            self.enclosing_class_source = self.get_class_source(self.enclosing_class)
+            self.enclosing_class_source = self.get_class_source(self.enclosing_class)[0]
 
     def _parse_enclosing_module_source(self):
         self.enclosing_module_source = self.get_module_source(self.enclosing_module)
@@ -316,11 +315,11 @@ class CallSite:
         else:
             return inspect.getsource(module)
 
-    def get_class_source(self, cls: Type) -> str:
+    def get_class_source(self, cls: Type) -> Tuple[str, Union[ModuleType, Cell]]:
         if hasattr(cls, '__in_notebook__'):
             return Notebook.current().find_class_source(cls)
         else:
-            return remove_indentation(inspect.getsource(cls))
+            return remove_indentation(inspect.getsource(cls)), inspect.getmodule(cls)
 
     def get_function_source(self, func: Union[FunctionType, MethodType]) -> str:
         return remove_indentation(inspect.getsource(func))

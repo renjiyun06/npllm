@@ -38,7 +38,7 @@ class FunctionCodeContextProvider(CodeContextProvider):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)))
+            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)[0]))
 
         code_context = []
         absolute_line_number = call_site.line_number
@@ -75,7 +75,7 @@ class ClassCodeContextProvider(CodeContextProvider):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)))
+            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)[0]))
 
         code_context = []
         absolute_line_number = call_site.line_number
@@ -105,7 +105,9 @@ class ModuleCodeContextProvider(CodeContextProvider):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)))
+            class_source, class_module = call_site.get_class_source(referenced_custom_type)
+            if class_module != call_site.enclosing_module:
+                referenced_custom_types_sources.append((referenced_custom_type, class_source))
 
         code_context = []
         for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:

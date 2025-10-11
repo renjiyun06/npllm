@@ -67,7 +67,7 @@ class CustomClassType(CallSiteReturnType):
             logger.debug(f"CustomClassType.from_annotation: {class_name} is self-referencing")
             return self_referencing_custom_class_type
         
-        custom_class_source = call_site.get_class_source(custom_class_cls)
+        custom_class_source = call_site.get_class_source(custom_class_cls)[0]
         if not custom_class_source:
             raise RuntimeError(f"Cannot get source of custom class {class_name}")
 

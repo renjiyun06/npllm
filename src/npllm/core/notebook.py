@@ -2,7 +2,7 @@ import hashlib
 import json
 import ast
 from dataclasses import dataclass
-from typing import List, Type, Optional
+from typing import List, Type, Optional, Tuple
 
 from IPython import get_ipython
 import ipynbname
@@ -18,6 +18,12 @@ class Cell:
 
     def fake_module_filename(self) -> str:
         return f"{self.path}#{self.id}"
+
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Cell):
+            return False
+
+        return self.path == value.path and self.id == value.id
 
 class Notebook:
     @classmethod
@@ -66,17 +72,14 @@ class Notebook:
         else:
             raise RuntimeError(f"Found multiple cells with the same code: {code}")
 
-    def find_class_source(self, cls: Type) -> Optional[str]:
+    def find_class_source(self, cls: Type) -> Tuple[str, Cell]:
         for cell in self.cells:
             cell_source = cell.code
             tree = ast.parse(cell_source)
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef) and node.name == cls.__name__:
                     cls.__notebook_cell_id__ = cell.id
-                    return ast.unparse(node)
-
-        return None
-
+                    return ast.unparse(node), cell
 
     def __hash__(self) -> int:
         return hash(self.path)
