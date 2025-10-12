@@ -112,36 +112,36 @@ class CallSite:
             if hasattr(node, 'lineno') and node.lineno == relative_line_number:
                 if self._is_async:
                     if isinstance(node, ast.If) and isinstance(node.test, ast.Await) and node.test.value.func.attr == self.method_name:
+                        self._node = node.test.value
                         ctx = IfCtx(self)
-                        self._node = node.test.value
                     elif isinstance(node, ast.While) and isinstance(node.test, ast.Await) and node.test.value.func.attr == self.method_name:
-                        ctx = WhileCtx(self)
                         self._node = node.test.value
+                        ctx = WhileCtx(self)
                     elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == self.method_name:
+                        self._node = node.value.value
                         ctx = AssignCtx(self, node)
-                        self._node = node.value.value
                     elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == self.method_name:
+                        self._node = node.value.value
                         ctx = AnnAssignCtx(self, node)
-                        self._node = node.value.value
                     elif isinstance(node, ast.Return) and isinstance(node.value, ast.Await) and node.value.value.func.attr == self.method_name:
-                        ctx = ReturnCtx(self)
                         self._node = node.value.value
+                        ctx = ReturnCtx(self)
                 else:
                     if isinstance(node, ast.If) and isinstance(node.test, ast.Call) and node.test.func.attr == self.method_name:
                         self._node = node.test.value
                         ctx = IfCtx(self)
                     elif isinstance(node, ast.While) and isinstance(node.test, ast.Call) and node.test.func.attr == self.method_name:
-                        ctx = WhileCtx(self)
                         self._node = node.test.value
+                        ctx = WhileCtx(self)
                     elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and node.value.func.attr == self.method_name:
+                        self._node = node.value
                         ctx = AssignCtx(self, node)
-                        self._node = node.value
                     elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Call) and node.value.func.attr == self.method_name:
-                        self._node = node.value
                         ctx = AnnAssignCtx(self, node)
-                    elif isinstance(node, ast.Return) and isinstance(node.value, ast.Call) and node.value.func.attr == self.method_name:
-                        ctx = ReturnCtx(self)
                         self._node = node.value
+                    elif isinstance(node, ast.Return) and isinstance(node.value, ast.Call) and node.value.func.attr == self.method_name:
+                        self._node = node.value
+                        ctx = ReturnCtx(self)
 
         if ctx:
             self._ctx = ctx
@@ -170,7 +170,9 @@ class CallSite:
         args_types = []
         for arg_name, arg in args:
             annotation = None
-            if isinstance(arg, ast.Constant):
+            if arg_name == "return_type":
+                continue
+            elif isinstance(arg, ast.Constant):
                 annotation = arg
             else:
                 if isinstance(arg, ast.Name):

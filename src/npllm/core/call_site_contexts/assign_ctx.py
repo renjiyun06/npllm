@@ -14,6 +14,10 @@ class AssignCtx(CallSiteCtx):
         self._return_type = self._parse_return_type()
     
     def _parse_return_type(self) -> CallSiteReturnType:
+        kwargs = {kw.arg: kw.value for kw in self._call_site._node.keywords}
+        if "return_type" in kwargs:
+            return CallSiteReturnType.from_annotation(kwargs["return_type"], self._call_site)
+        
         target = self._assign.targets[0]
         if isinstance(target, ast.Tuple):
             # a, b = generate(...) is not supported yet

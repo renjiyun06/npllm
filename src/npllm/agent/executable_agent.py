@@ -5,15 +5,10 @@ from dataclasses import dataclass
 from pydantic import TypeAdapter
 
 @dataclass
-class OutputSpec:
-    json_schema: str
-    format_guidance: str
-
-@dataclass
 class Task:
     title: str
     description: str
-    output_spec: OutputSpec
+    output_json_schema: str
 
 class ExecutableAgent(ABC):
     def __init__(self, agent_id: str):

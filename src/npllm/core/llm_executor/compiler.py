@@ -7,7 +7,7 @@ from npllm.core.code_context_provider import CodeContextProvider
 
 class SystemPromptTemplate(ABC):
     @abstractmethod
-    def format(self, output_json_schema: str, args: List[Any], kwargs: Dict[str, Any]) -> str:
+    def format(self, default_output_json_schema: str, args: List[Any], kwargs: Dict[str, Any]) -> str:
         pass
 
 class UserPromptTemplate(ABC):

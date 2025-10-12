@@ -18,15 +18,54 @@ logger = logging.getLogger(__name__)
 
 litellm.callbacks = ["langsmith"]
 
+def format(template, args: List[Any], kwargs: Dict[str, Any]) -> str:
+    placeholders = re.findall(r"{{[^}]+}}", template)
+    for original_placeholder in placeholders:
+        placeholder = original_placeholder
+        placeholder = placeholder.replace("{{", "").replace("}}", "")
+        
+        root_obj = None
+        dot_chain = []
+        if placeholder.startswith("arg"):
+            placeholder = placeholder[len("arg"):]
+            position_index = int(placeholder.split(".")[0])
+            root_obj = args[position_index]
+            dot_chain = placeholder.split(".")[1:]
+        else:
+            root_obj = kwargs[placeholder.split(".")[0]]
+            dot_chain = placeholder.split(".")[1:]
+
+        value = root_obj
+        for field in dot_chain:
+            value = getattr(value, field)
+
+        formatted_value: List[str] = []
+        if isinstance(value, list):
+            for item in value:
+                formatted_value.append(str(item))
+        else:
+            formatted_value.append(str(value))
+
+        template = template.replace(original_placeholder, "\n".join(formatted_value))
+
+    return template.strip()
+
 class DefaultSystemPromptTemplate(SystemPromptTemplate):
     def __init__(self, node: ET.Element):
         self._node = node
     
-    def format(self, output_json_schema: str, args: List[Any], kwargs: Dict[str, Any]) -> str:
+    def format(self, default_output_json_schema: str, args: List[Any], kwargs: Dict[str, Any]) -> str:
         role_and_context = self._node.find(DefaultCompilationResult.tag_role_and_context).text.strip()
         task_description = self._node.find(DefaultCompilationResult.tag_task_description).text.strip()
         guidelines = self._node.find(DefaultCompilationResult.tag_guidelines).text.strip()
         output = self._node.find(DefaultCompilationResult.tag_output)
+
+        output_json_schema = None
+        output_json_schema_node = output.find(DefaultCompilationResult.tag_output_json_schema)
+        if output_json_schema_node is not None:
+            output_json_schema = format(output_json_schema_node.text.strip(), args, kwargs)
+
+        output_json_schema = output_json_schema or default_output_json_schema
         format_guidance = output.find(DefaultCompilationResult.tag_format_guidance).text.strip()
         return f"""
 <role_and_context>
@@ -54,37 +93,7 @@ class DefaultUserPromptTemplate(UserPromptTemplate):
         self._node = node
 
     def format(self, args: List[Any], kwargs: Dict[str, Any]) -> str:
-        template = self._node.text
-        placeholders = re.findall(r"{{[^}]+}}", template)
-        for original_placeholder in placeholders:
-            placeholder = original_placeholder
-            placeholder = placeholder.replace("{{", "").replace("}}", "")
-            
-            root_obj = None
-            dot_chain = []
-            if placeholder.startswith("arg"):
-                placeholder = placeholder[len("arg"):]
-                position_index = int(placeholder.split(".")[0])
-                root_obj = args[position_index]
-                dot_chain = placeholder.split(".")[1:]
-            else:
-                root_obj = kwargs[placeholder.split(".")[0]]
-                dot_chain = placeholder.split(".")[1:]
-
-            value = root_obj
-            for field in dot_chain:
-                value = getattr(value, field)
-
-            formatted_value: List[str] = []
-            if isinstance(value, list):
-                for item in value:
-                    formatted_value.append(str(item))
-            else:
-                formatted_value.append(str(value))
-
-            template = template.replace(original_placeholder, "\n".join(formatted_value))
-
-        return template.strip()
+        return format(self._node.text, args, kwargs)
 
 class CompilationNotes:
     def __init__(self, node: ET.Element):
@@ -97,6 +106,7 @@ class DefaultCompilationResult:
     tag_task_description = "task_description"
     tag_guidelines = "guidelines"
     tag_output = "output"
+    tag_output_json_schema = "output_json_schema"
     tag_format_guidance = "format_guidance"
     tag_user_prompt_template = "user_prompt_template"
     tag_compilation_notes = "compilation_notes"

@@ -39,7 +39,7 @@ class LLMExecutor(CallSiteExecutor):
 
         logger.info(f"Call runtime LLM with model {self._runtime_model} for {call_site}")
         system_prompt = compilation_result.system_prompt_template.format(
-            output_json_schema=call_site.return_type.json_schema(),
+            default_output_json_schema=call_site.return_type.json_schema(),
             args=args, 
             kwargs=kwargs
         )

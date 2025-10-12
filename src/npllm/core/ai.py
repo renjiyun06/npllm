@@ -6,7 +6,6 @@ from typing import Any, Callable
 
 from npllm.core.call_site import CallSite
 from npllm.core.call_site_executor import CallSiteExecutor
-from npllm.core.llm_executor.llm_executor import LLMExecutor
 
 import logging
 
@@ -14,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 class AI:
     def __init__(self, call_site_executor: CallSiteExecutor=None):
-        self._call_site_executor = call_site_executor or LLMExecutor()
+        if call_site_executor is None:
+            import npllm.agent.agent_executor
+            call_site_executor = npllm.agent.agent_executor.AgentExecutor()
+
+        self._call_site_executor = call_site_executor
 
     def __getattr__(self, method_name: str) -> Callable:
 
