@@ -1,6 +1,5 @@
 from typing import Any, List, Dict
 
-import litellm
 from litellm import acompletion
 
 from npllm.core.call_site import CallSite
@@ -14,18 +13,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-litellm.callbacks = ["langsmith"]
-
 class LLMExecutor(CallSiteExecutor):
     """LLMExecutor use the Compiler to translate the call site to prompts, and then invoke the runtime model to execute the call site"""
     def __init__(
         self, 
         runtime_model: str="openrouter/google/gemini-2.5-flash", 
-        code_context_provider: CodeContextProvider=FunctionCodeContextProvider(),
         compiler: Compiler=DefaultCompiler("openrouter/google/gemini-2.5-pro")
     ):
         self._runtime_model = runtime_model
-        self._code_context_provider = code_context_provider
         self._compiler = compiler
 
     async def execute(self, call_site: CallSite, args: List[Any], kwargs: Dict[str, Any]) -> Any:
@@ -39,8 +34,7 @@ class LLMExecutor(CallSiteExecutor):
 
         logger.info(f"Call runtime LLM with model {self._runtime_model} for {call_site}")
         system_prompt = compilation_result.system_prompt_template.format(
-            default_output_json_schema=call_site.return_type.json_schema(),
-            args=args, 
+            args=args,
             kwargs=kwargs
         )
         logger.debug(f"Runtime LLM system prompt: {system_prompt}")

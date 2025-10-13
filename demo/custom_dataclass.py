@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+import npllm
 
-from npllm.core.ai import AI
+from dataclasses import dataclass
 
 import logging
 
@@ -22,6 +22,5 @@ class User:
     age: int
     address: Address
 
-ai = AI()
-user: User = ai.reason('Create a user with name "John", age 25, and address "123 Main St, Anytown, USA, 12345"')
+user: User = reason('Create a user with name "John", age 25, and address "123 Main St, Anytown, USA, 12345"')
 print(user)

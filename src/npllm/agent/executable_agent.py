@@ -19,5 +19,5 @@ class ExecutableAgent(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, task: Task, output_type_adapter: TypeAdapter) -> Any:
+    async def execute(self, task: Task) -> Any:
         pass

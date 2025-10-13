@@ -117,9 +117,11 @@ class CallSite:
                     elif isinstance(node, ast.While) and isinstance(node.test, ast.Await) and node.test.value.func.attr == self.method_name:
                         self._node = node.test.value
                         ctx = WhileCtx(self)
-                    elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Await) and node.value.value.func.attr == self.method_name:
-                        self._node = node.value.value
-                        ctx = AssignCtx(self, node)
+                    elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Await) and isinstance(node.value.value.func, (ast.Name, ast.Attribute)):
+                        func_node = node.value.value.func
+                        if isinstance(func_node, ast.Name) and func_node.id == self.method_name or isinstance(func_node, ast.Attribute) and func_node.attr == self.method_name:
+                            self._node = node.value.value
+                            ctx = AssignCtx(self, node)
                     elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Await) and isinstance(node.value.value.func, (ast.Name, ast.Attribute)):
                         func_node = node.value.value.func
                         if isinstance(func_node, ast.Name) and func_node.id == self.method_name or isinstance(func_node, ast.Attribute) and func_node.attr == self.method_name:
@@ -135,9 +137,11 @@ class CallSite:
                     elif isinstance(node, ast.While) and isinstance(node.test, ast.Call) and node.test.func.attr == self.method_name:
                         self._node = node.test.value
                         ctx = WhileCtx(self)
-                    elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and node.value.func.attr == self.method_name:
-                        self._node = node.value
-                        ctx = AssignCtx(self, node)
+                    elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and isinstance(node.value.func, (ast.Name, ast.Attribute)):
+                        func_node = node.value.func
+                        if isinstance(func_node, ast.Name) and func_node.id == self.method_name or isinstance(func_node, ast.Attribute) and func_node.attr == self.method_name:
+                            self._node = node.value
+                            ctx = AssignCtx(self, node)
                     elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Call) and isinstance(node.value.func, (ast.Name, ast.Attribute)):
                         func_node = node.value.func
                         if isinstance(func_node, ast.Name) and func_node.id == self.method_name or isinstance(func_node, ast.Attribute) and func_node.attr == self.method_name: 

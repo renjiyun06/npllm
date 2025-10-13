@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from npllm.core.call_site import CallSite
 from npllm.utils.source_util import add_line_number
+from npllm.utils.object_util import singleton
 
 @dataclass
 class CodeContext:
@@ -16,6 +17,7 @@ class CodeContextProvider(ABC):
     def get_code_context(self, call_site: CallSite) -> CodeContext:
         pass
 
+@singleton
 class FunctionCodeContextProvider(CodeContextProvider):
     def get_code_context(self, call_site: CallSite) -> CodeContext:
         enclosing_function = call_site.enclosing_function
@@ -51,7 +53,7 @@ class FunctionCodeContextProvider(CodeContextProvider):
         code_context.extend(enclosing_function_source.splitlines())
         return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
 
-
+@singleton
 class ClassCodeContextProvider(CodeContextProvider):
     def get_code_context(self, call_site: CallSite) -> CodeContext:
         enclosing_class = call_site.enclosing_class
@@ -89,6 +91,7 @@ class ClassCodeContextProvider(CodeContextProvider):
 
         return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
 
+@singleton
 class ModuleCodeContextProvider(CodeContextProvider):
     def get_code_context(self, call_site: CallSite) -> CodeContext:
         return_type = call_site.return_type
