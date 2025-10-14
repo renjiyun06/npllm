@@ -1,8 +1,8 @@
 # Section 4: Reference Example
 
-This section provides a complete end-to-end example demonstrating the application of all principles and specifications from the previous sections.
+**Purpose**: A complete end-to-end example applying the principles and specifications.
 
-## 4.1 Input: Compilation Task
+**Input (compile_task XML)**:
 
 ```xml
 <compile_task>
@@ -105,7 +105,7 @@ class CustomerServiceAnalyzer:
 </compile_task>
 ```
 
-## 4.2 Output: Compilation Result
+**Output (compilation result)**:
 
 ```
 ==f6aff7b2-f23f-441f-b1e9-0b1e64055475==SYSTEM_PROMPT==
@@ -185,74 +185,24 @@ Please provide a comprehensive analysis including sentiment assessment, key issu
 ==f6aff7b2-f23f-441f-b1e9-0b1e64055475==NOTES==
 Compilation Decisions:
 
-1. Role Definition: Inferred from class name "CustomerServiceAnalyzer" and method docstring. Chose "customer service analysis specialist" to convey expertise without exposing the class name.
-
-2. Compiler Directive: Found "@compile: use XML tags for structured data presentation in user prompt" on line 34. Applied by wrapping the feedback parameter in XML structure with individual fields.
-
-3. Parameter Presentation: The feedback parameter is a structured object (CustomerFeedback). Used XML format as directed, with explicit field tags for clarity. This makes the structure readable for the runtime LLM while following the directive.
-
-4. Type Inference: 
-   - Parameter type inferred from method signature: feedback: CustomerFeedback
-   - Return type inferred from method signature: FeedbackAnalysis
-   - All nested types (ActionItem) fully analyzed from the JSON schema
-
-5. Schema Handling:
-   - Input schema was precise and complete, so used it as-is without refinement
-   - Placed schema in SYSTEM_PROMPT under "Output Requirements" section
-   - This is appropriate because the output structure is task-invariant (same schema for all feedback analysis)
-   - Included both the formal JSON Schema and a concrete example for clarity
-   - Schema placement in SYSTEM_PROMPT allows the runtime LLM to internalize the structure before seeing specific data
-
-6. Output Structure: The return type has nested complexity (list of ActionItem objects). Provided the complete JSON Schema to precisely define the structure, followed by a concrete example showing the full nested structure.
-
-7. Abstraction: 
-   - Hidden: "CustomerServiceAnalyzer" class name, "analyze_feedback" method name
-   - Exposed: Field names from JSON schema (sentiment, key_issues, etc.) as these are part of the output contract
-   - Used business domain language throughout (customer, feedback, analysis, recommendations)
-
-8. Guidelines: Derived from the method docstring ("identify sentiment, key issues, and recommend appropriate follow-up actions") and expanded based on the return type structure. Each output field has corresponding guidance.
-
-9. Satisfaction Score Range: Noted from the comment "# 1-10" in the code and enforced in the JSON schema (minimum: 1, maximum: 10). Included in guidelines.
-
-10. Action Prioritization: The ActionItem type includes a priority field with three levels. Provided clear guidance on how to assign priority levels in the system prompt.
-
-11. No Conflicts: All signals (types, comments, docstring, directive) were consistent. The directive was straightforward to apply.
+1. Role Definition: Inferred from class name and docstring; phrased without exposing code symbols.
+2. Compiler Directive: Applied XML wrapping per `@compile` directive in the docstring.
+3. Parameter Presentation: Structured object presented in XML with explicit fields.
+4. Type Inference: Parameter/return types and nested types align with schema.
+5. Schema Handling: Used given precise schema; placed in SYSTEM_PROMPT; included example.
+6. Output Structure: Captures nested list of objects per schema.
+7. Abstraction: Hidden code structure; exposed schema field names and domain terms.
+8. Guidelines: Derived from docstring and schema fields.
+9. Satisfaction Score Range: Enforced by schema (1–10).
+10. Action Prioritization: Matches enum; guidance given.
+11. No Conflicts: Signals consistent.
 ==f6aff7b2-f23f-441f-b1e9-0b1e64055475==END_NOTES==
-```
 
-## 4.3 Key Observations
+**Observations**:
 
-### Semantic Extraction
-- **Business domain** identified from class name and docstrings: customer service analysis
-- **Intent** extracted from method docstring: analyze feedback for sentiment, issues, and actions
-- **Type structure** provided clear guidance on required output fields
-
-### Abstraction Applied
-- **Hidden**: Code structure (class name `CustomerServiceAnalyzer`, method name `analyze_feedback`)
-- **Exposed**: Output contract fields (`sentiment`, `key_issues`, `recommended_actions`)
-- **Language**: Business domain terminology (customer, feedback, satisfaction) rather than programming terms
-
-### Compiler Directive
-- Directive `@compile: use XML tags for structured data presentation` was found and applied
-- Parameter presentation changed from simple format to XML-wrapped structure
-- This demonstrates how directives override default presentation strategies
-
-### Parameter Reference Protocol
-- Used `{{feedback.customer_id}}`, `{{feedback.feedback_text}}` etc. with dot notation
-- Followed valid placeholder syntax throughout
-- No prohibited patterns (subscripts, expressions, method calls)
-
-### Completeness
-- System prompt is self-contained: runtime LLM doesn't need to see the original code
-- All output fields have corresponding guidance
-- Example output demonstrates the complete nested structure
-- Task is fully specified with clear expectations
-
-### Quality Verification
-- Role defined without code exposure ✓
-- Task focuses on intent, not implementation ✓
-- Valid placeholder syntax used ✓
-- Output requirements match return specification ✓
-- Guidelines address execution, not formatting ✓
-- No unsupported assumptions introduced ✓
-- Decisions documented in NOTES ✓
+- Semantic extraction: domain (customer service), intent (sentiment/issues/actions), types guide outputs.
+- Abstraction applied: hide code structure; expose output fields; use domain language.
+- Compiler directive: XML tags applied in user prompt per directive.
+- Parameter reference protocol: dot-notation placeholders; no prohibited patterns.
+- Completeness: self-contained system prompt; example shows nested structure; expectations clear.
+- Quality verification: role without code exposure ✓; focus on intent ✓; placeholders valid ✓; output matches return spec ✓; guidance actionable ✓; no unsupported assumptions ✓; decisions recorded ✓
