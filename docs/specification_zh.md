@@ -24,11 +24,13 @@
 形式上，以下情况构成语义调用：
 
 1. **未定义的函数调用**：调用的函数名在当前作用域及所有外层作用域中都无法解析
+
    ```python
    result = analyze_sentiment(text)  # analyze_sentiment 未定义
    ```
 
 2. **未定义的方法调用**：对象上调用的方法在该对象的类及其继承链中都不存在
+
    ```python
    customer.calculate_lifetime_value()  # Customer 类没有此方法
    ```
@@ -130,6 +132,7 @@ class CustomerService:
 ### 4.2 执行流的切换
 
 **进入语义执行流**：
+
 - 触发条件：遇到无法解析的调用
 - 切换过程：
   1. Python 解释器捕获调用请求
@@ -137,6 +140,7 @@ class CustomerService:
   3. 将控制权转移给语义执行引擎
   
 **返回 Python 执行流**：
+
 - 触发条件：语义执行完成并产生返回值
 - 切换过程：
   1. 语义执行引擎生成返回值

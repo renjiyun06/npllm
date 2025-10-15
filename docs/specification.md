@@ -24,11 +24,13 @@ A **semantic call** occurs during program execution when a call expression canno
 Formally, the following situations constitute semantic calls:
 
 1. **Undefined function call**: The function name cannot be resolved in the current scope or any outer scope
+
    ```python
    result = analyze_sentiment(text)  # analyze_sentiment is undefined
    ```
 
 2. **Undefined method call**: The method called on an object does not exist in the object's class or inheritance chain
+
    ```python
    customer.calculate_lifetime_value()  # Customer class has no such method
    ```
@@ -130,6 +132,7 @@ The program switches between these two execution flows:
 ### 4.2 Execution Flow Switching
 
 **Entering semantic execution flow**:
+
 - Trigger condition: Encountering an unresolved call
 - Switching process:
   1. Python interpreter captures the call request
@@ -137,6 +140,7 @@ The program switches between these two execution flows:
   3. Transfers control to the semantic execution engine
   
 **Returning to Python execution flow**:
+
 - Trigger condition: Semantic execution completes and produces a return value
 - Switching process:
   1. Semantic execution engine generates return value
