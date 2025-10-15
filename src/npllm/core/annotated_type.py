@@ -8,14 +8,14 @@ from pydantic import TypeAdapter
 
 from npllm.core.notebook import Cell
 
-class SemanticCallReturnType(ABC):
+class AnnotatedType(ABC):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.AST, 
         semantic_call, 
-        enclosing_type: Optional['SemanticCallReturnType']=None
-    ) -> 'SemanticCallReturnType':
+        enclosing_type: Optional['AnnotatedType']=None
+    ) -> 'AnnotatedType':
         from npllm.core.types.str_type import StrType
         from npllm.core.types.int_type import IntType
         from npllm.core.types.float_type import FloatType
@@ -44,7 +44,7 @@ class SemanticCallReturnType(ABC):
                 CustomClassType.from_annotation(annotation, semantic_call, enclosing_type)
             )
     
-    def __init__(self, semantic_call, enclosing_type: Optional['SemanticCallReturnType']=None):
+    def __init__(self, semantic_call, enclosing_type: Optional['AnnotatedType']=None):
         self._semantic_call = semantic_call
         self._enclosing_type = enclosing_type
 

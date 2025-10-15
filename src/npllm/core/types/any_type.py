@@ -2,16 +2,16 @@ import ast
 from typing import Optional, Any, Set, List, Type, Dict, Union
 from types import ModuleType
 
-from npllm.core.semantic_call_return_type import SemanticCallReturnType
+from npllm.core.annotated_type import AnnotatedType
 from npllm.core.notebook import Cell
 
-class AnyType(SemanticCallReturnType):
+class AnyType(AnnotatedType):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.Name | ast.Constant,
         semantic_call,
-        enclosing_type: Optional[SemanticCallReturnType]=None
+        enclosing_type: Optional[AnnotatedType]=None
     ) -> Optional['AnyType']:
         if isinstance(annotation, ast.Name) and annotation.id == 'Any':
             return AnyType(semantic_call, enclosing_type)
@@ -19,13 +19,13 @@ class AnyType(SemanticCallReturnType):
             return AnyType(semantic_call, enclosing_type)
         return None
     
-    def __init__(self, semantic_call, enclosing_type: Optional[SemanticCallReturnType]=None):
-        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
+    def __init__(self, semantic_call, enclosing_type: Optional[AnnotatedType]=None):
+        AnnotatedType.__init__(self, semantic_call, enclosing_type)
 
     def runtime_type(self) -> Type:
         return Any
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[AnnotatedType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -33,7 +33,7 @@ class AnyType(SemanticCallReturnType):
         visited.add(self)
         return []
 
-    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[AnnotatedType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:

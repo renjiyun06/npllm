@@ -2,20 +2,20 @@ import ast
 from typing import Optional, List, Tuple, Set, Type, Dict, Union
 from types import ModuleType
 
-from npllm.core.semantic_call_return_type import SemanticCallReturnType
+from npllm.core.annotated_type import AnnotatedType
 from npllm.core.notebook import Cell
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-class TupleType(SemanticCallReturnType):
+class TupleType(AnnotatedType):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.Subscript, 
         semantic_call, 
-        enclosing_type: Optional[SemanticCallReturnType]=None
+        enclosing_type: Optional[AnnotatedType]=None
     ) -> Optional['TupleType']:
         if (
             not isinstance(annotation, ast.Subscript) or 
@@ -28,7 +28,7 @@ class TupleType(SemanticCallReturnType):
         tuple_type = TupleType(semantic_call, enclosing_type=enclosing_type)
         item_types = []
         for elt in annotation.slice.elts:
-            item_type = SemanticCallReturnType.from_annotation(elt, semantic_call, tuple_type)
+            item_type = AnnotatedType.from_annotation(elt, semantic_call, tuple_type)
             if item_type:
                 item_types.append(item_type)
             else:
@@ -38,15 +38,15 @@ class TupleType(SemanticCallReturnType):
         logger.debug(f"TupleType.from_annotation: {ast.dump(annotation)}")
         return tuple_type
 
-    def __init__(self, semantic_call, enclosing_type: Optional[SemanticCallReturnType]=None, item_types: Optional[List[SemanticCallReturnType]]=None):
-        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
+    def __init__(self, semantic_call, enclosing_type: Optional[AnnotatedType]=None, item_types: Optional[List[AnnotatedType]]=None):
+        AnnotatedType.__init__(self, semantic_call, enclosing_type)
         self._item_types = item_types or []
 
     def runtime_type(self) -> Type:
         item_types = [item_type.runtime_type() for item_type in self._item_types]
         return Tuple[*item_types]
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[AnnotatedType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -57,7 +57,7 @@ class TupleType(SemanticCallReturnType):
             result.extend(item_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[AnnotatedType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:

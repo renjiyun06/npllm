@@ -2,18 +2,18 @@ import ast
 import sys
 import inspect
 from types import FrameType, FunctionType, MethodType, ModuleType
-from typing import Optional, Union, Any, List, Tuple, Set, Type, Dict
+from typing import Optional, Union, Any, List, Tuple, Type, Dict
 from dataclasses import is_dataclass
 
 from pydantic import BaseModel
 
-from npllm.core.call_site_return_type import CallSiteReturnType
-from npllm.core.call_site_ctx import CallSiteCtx
-from npllm.core.call_site_contexts.ann_assign_ctx import AnnAssignCtx
-from npllm.core.call_site_contexts.assign_ctx import AssignCtx
-from npllm.core.call_site_contexts.if_ctx import IfCtx
-from npllm.core.call_site_contexts.return_ctx import ReturnCtx
-from npllm.core.call_site_contexts.while_ctx import WhileCtx
+from npllm.core.annotated_type import AnnotatedType
+from npllm.core.semantic_call_ctx import SemanticCallCtx
+from npllm.core.semantic_call_contexts.ann_assign_ctx import AnnAssignCtx
+from npllm.core.semantic_call_contexts.assign_ctx import AssignCtx
+from npllm.core.semantic_call_contexts.if_ctx import IfCtx
+from npllm.core.semantic_call_contexts.return_ctx import ReturnCtx
+from npllm.core.semantic_call_contexts.while_ctx import WhileCtx
 from npllm.utils.source_util import remove_indentation
 from npllm.utils.inspect_util import get_class_from_module, is_module_frame
 from npllm.core.notebook import Notebook, Cell
@@ -22,21 +22,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class CallSite:
-    _call_site_cache: Dict['CallSite', 'CallSite'] = {}
+class SemanticCall:
 
     @classmethod
-    def of(cls, caller_frame: FrameType, method_name: str, is_async: bool, debug=False) -> 'CallSite':
-        call_site = cls(caller_frame, method_name, is_async)
-        if not call_site.in_notebook() and call_site in cls._call_site_cache and not debug:
-            logger.info(f"Returning cached initialized {call_site}")
-            return CallSite._call_site_cache[call_site]
-        else:
-            logger.info(f"Initializing {call_site}")
-            call_site.initialize()
-            logger.info(f"Initialized {call_site}")
-            cls._call_site_cache[call_site] = call_site
-            return call_site
+    def of(cls, caller_frame: FrameType, method_name: str, is_async: bool, debug=False) -> 'SemanticCall':
+        semantic_call = cls(caller_frame, method_name, is_async)
+        logger.info(f"Initializing {semantic_call}")
+        semantic_call.initialize()
+        logger.info(f"Initialized {semantic_call}")
+        return semantic_call
 
     def __init__(
         self,
@@ -74,9 +68,9 @@ class CallSite:
         self._node: ast.Call = None
         self._ctx = None
         
-        self.return_type: CallSiteReturnType = None
-        self.positional_parameters: List[Tuple[int, CallSiteReturnType]] = None
-        self.keyword_parameters: List[Tuple[str, CallSiteReturnType]] = None
+        self.return_type: AnnotatedType = None
+        self.positional_parameters: List[Tuple[int, AnnotatedType]] = None
+        self.keyword_parameters: List[Tuple[str, AnnotatedType]] = None
 
         self.dependent_modules: Dict[str, Union[ModuleType, Cell]] = None
 
@@ -105,7 +99,7 @@ class CallSite:
         else:
             return self.enclosing_module_source, self.line_number
 
-    def _parse_ctx(self) -> CallSiteCtx:
+    def _parse_ctx(self) -> SemanticCallCtx:
         ctx = None
         minimal_enclosing_source, relative_line_number = self._minimal_enclosing_source_and_relative_line_number()
         for node in ast.walk(ast.parse(minimal_enclosing_source)):
@@ -156,7 +150,7 @@ class CallSite:
             self.return_type = ctx.return_type
             logger.info(f"Return type for {self}: {self.return_type}")
         else:
-            raise RuntimeError(f"Call site context for {self} is not supported yet")
+            raise RuntimeError(f"Semantic call context for {self} is not supported yet")
 
     def _parse_dependent_modules(self):
         dependent_modules = {}
@@ -168,13 +162,13 @@ class CallSite:
         logger.info(f"Dependent modules for {self}: {dependent_modules}")
         self.dependent_modules = dependent_modules
 
-    def _parse_positional_parameters(self) -> List[Tuple[int, CallSiteReturnType]]:
-        self.positional_parameters = self._parse_args_types([(i, arg) for i, arg in enumerate(self._node.args)])
+    def _parse_positional_parameters(self):
+        self.positional_parameters = self._get_args_types([(i, arg) for i, arg in enumerate(self._node.args)])
 
-    def _parse_keyword_parameters(self) -> List[Tuple[str, CallSiteReturnType]]:
-        self.keyword_parameters = self._parse_args_types([(kw.arg, kw.value) for kw in self._node.keywords])
+    def _parse_keyword_parameters(self):
+        self.keyword_parameters = self._get_args_types([(kw.arg, kw.value) for kw in self._node.keywords])
 
-    def _parse_args_types(self, args) -> List[Tuple[Union[int, str], CallSiteReturnType]]:
+    def _get_args_types(self, args) -> List[Tuple[Union[int, str], AnnotatedType]]:
         args_types = []
         for arg_name, arg in args:
             annotation = None
@@ -196,7 +190,7 @@ class CallSite:
 
                 annotation = declaration_node.annotation
 
-            arg_type = CallSiteReturnType.from_annotation(annotation, self)
+            arg_type = AnnotatedType.from_annotation(annotation, self)
             if not arg_type:
                 raise RuntimeError(f"Cannot parse argument type for {var_name} at {self}")
 
@@ -341,7 +335,7 @@ class CallSite:
         return hash((self.module_filename, self.line_number, self.method_name))
 
     def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, CallSite):
+        if not isinstance(other, SemanticCall):
             return False
 
         return (
@@ -351,4 +345,4 @@ class CallSite:
         )
 
     def __str__(self) -> str:
-        return f"CallSite[{self.module_filename}:{self.line_number}:{self.method_name}]"
+        return f"SemanticCall[{self.module_filename}:{self.line_number}:{self.method_name}]"

@@ -2,15 +2,16 @@ import ast
 from typing import Optional, List, Union, Literal, Set, Type, Dict
 from types import ModuleType
 
-from npllm.core.semantic_call_return_type import SemanticCallReturnType
+from npllm.core.notebook import Cell
+from npllm.core.annotated_type import AnnotatedType
 
-class LiteralType(SemanticCallReturnType):
+class LiteralType(AnnotatedType):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.Subscript,
         semantic_call,
-        enclosing_type: Optional[SemanticCallReturnType]=None
+        enclosing_type: Optional[AnnotatedType]=None
     ) -> Optional['LiteralType']:
 
         if (
@@ -31,14 +32,14 @@ class LiteralType(SemanticCallReturnType):
         
         raise RuntimeError(f"Unsupported literal type: {ast.unparse(annotation)}")
     
-    def __init__(self, semantic_call, values: List[Union[str, int, float, bool]], enclosing_type: Optional[SemanticCallReturnType]=None):
-        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
+    def __init__(self, semantic_call, values: List[Union[str, int, float, bool]], enclosing_type: Optional[AnnotatedType]=None):
+        AnnotatedType.__init__(self, semantic_call, enclosing_type)
         self._values = values
 
     def runtime_type(self) -> Type:
         return Literal[self._values]
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[AnnotatedType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -46,7 +47,7 @@ class LiteralType(SemanticCallReturnType):
         visited.add(self)
         return []
 
-    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[AnnotatedType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:

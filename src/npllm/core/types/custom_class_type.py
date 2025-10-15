@@ -2,7 +2,7 @@ import ast
 from typing import Optional, Dict, Set, List, Type, Union
 from types import ModuleType
 
-from npllm.core.semantic_call_return_type import SemanticCallReturnType
+from npllm.core.annotated_type import AnnotatedType
 from npllm.core.notebook import Cell
 from npllm.utils.module_util import module_path
 
@@ -10,11 +10,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class CustomClassType(SemanticCallReturnType):
+class CustomClassType(AnnotatedType):
     @classmethod
     def _enclosing_custom_class_type(
         cls, 
-        enclosing_type: SemanticCallReturnType
+        enclosing_type: AnnotatedType
     ) -> Optional['CustomClassType']:
         current = enclosing_type
         while current:
@@ -27,7 +27,7 @@ class CustomClassType(SemanticCallReturnType):
     def _self_referencing_custom_class_type(
         cls, 
         custom_class_cls: Type, 
-        enclosing_type: SemanticCallReturnType
+        enclosing_type: AnnotatedType
     ) -> Optional['CustomClassType']:
         current = enclosing_type
         while current:
@@ -44,7 +44,7 @@ class CustomClassType(SemanticCallReturnType):
         cls, 
         annotation: ast.Name | ast.Constant, 
         semantic_call, 
-        enclosing_type: Optional[SemanticCallReturnType]=None
+        enclosing_type: Optional[AnnotatedType]=None
     ) -> Optional['CustomClassType']:
         class_name = None
         if isinstance(annotation, ast.Name):
@@ -80,7 +80,7 @@ class CustomClassType(SemanticCallReturnType):
                 for stmt in node.body:
                     if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
                         field_name = stmt.target.id
-                        field_type = SemanticCallReturnType.from_annotation(stmt.annotation, semantic_call, custom_class_type)
+                        field_type = AnnotatedType.from_annotation(stmt.annotation, semantic_call, custom_class_type)
                         if not field_type:
                             raise RuntimeError(f"Cannot parse field type for {field_name} in custom class {class_name}")
                         field_types[field_name] = field_type
@@ -96,10 +96,10 @@ class CustomClassType(SemanticCallReturnType):
         semantic_call,
         custom_class_name: str, 
         custom_class_cls: Type, 
-        field_types: Optional[Dict[str, SemanticCallReturnType]]=None,
-        enclosing_type: Optional[SemanticCallReturnType]=None
+        field_types: Optional[Dict[str, AnnotatedType]]=None,
+        enclosing_type: Optional[AnnotatedType]=None
     ):
-        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
+        AnnotatedType.__init__(self, semantic_call, enclosing_type)
         self._custom_class_name = custom_class_name
         self._custom_class_cls = custom_class_cls
         self._field_types = field_types or {}
@@ -107,7 +107,7 @@ class CustomClassType(SemanticCallReturnType):
     def runtime_type(self) -> Type:
         return self._custom_class_cls
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[AnnotatedType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -119,7 +119,7 @@ class CustomClassType(SemanticCallReturnType):
             result.extend(field_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[AnnotatedType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:

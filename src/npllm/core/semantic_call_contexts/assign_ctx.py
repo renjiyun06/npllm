@@ -1,7 +1,7 @@
 import ast
 
 from npllm.core.semantic_call_ctx import SemanticCallCtx
-from npllm.core.semantic_call_return_type import SemanticCallReturnType
+from npllm.core.annotated_type import AnnotatedType
 
 import logging
 
@@ -13,10 +13,10 @@ class AssignCtx(SemanticCallCtx):
         self._assign = assign
         self._return_type = self._parse_return_type()
     
-    def _parse_return_type(self) -> SemanticCallReturnType:
+    def _parse_return_type(self) -> AnnotatedType:
         kwargs = {kw.arg: kw.value for kw in self._semantic_call._node.keywords}
         if "return_type" in kwargs:
-            return SemanticCallReturnType.from_annotation(kwargs["return_type"], self._semantic_call)
+            return AnnotatedType.from_annotation(kwargs["return_type"], self._semantic_call)
         
         target = self._assign.targets[0]
         if isinstance(target, ast.Tuple):
@@ -37,12 +37,12 @@ class AssignCtx(SemanticCallCtx):
         if not declaration_node:
             raise RuntimeError(f"Cannot get annotated declaration node for variable {var_name} at {self._semantic_call}")
         
-        type = SemanticCallReturnType.from_annotation(declaration_node.annotation, self._semantic_call)
+        type = AnnotatedType.from_annotation(declaration_node.annotation, self._semantic_call)
         if type:
             return type
 
         raise RuntimeError(f"Failed to parse return type for {self._semantic_call}")
 
     @property
-    def return_type(self) -> SemanticCallReturnType:
+    def return_type(self) -> AnnotatedType:
         return self._return_type
