@@ -2,16 +2,15 @@ import ast
 from typing import Optional, List, Union, Literal, Set, Type, Dict
 from types import ModuleType
 
-from npllm.core.call_site_return_type import CallSiteReturnType
-from npllm.core.notebook import Cell
+from npllm.core.semantic_call_return_type import SemanticCallReturnType
 
-class LiteralType(CallSiteReturnType):
+class LiteralType(SemanticCallReturnType):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.Subscript,
-        call_site,
-        enclosing_type: Optional[CallSiteReturnType]=None
+        semantic_call,
+        enclosing_type: Optional[SemanticCallReturnType]=None
     ) -> Optional['LiteralType']:
 
         if (
@@ -28,18 +27,18 @@ class LiteralType(CallSiteReturnType):
             values = [elt.value for elt in annotation.slice.elts]
         
         if all(isinstance(v, (str, int, float, bool)) for v in values):
-            return LiteralType(call_site, values, enclosing_type=enclosing_type)
+            return LiteralType(semantic_call, values, enclosing_type=enclosing_type)
         
-        raise RuntimeError(f"Failed to parse literal type for {ast.dump(annotation)}")
+        raise RuntimeError(f"Unsupported literal type: {ast.unparse(annotation)}")
     
-    def __init__(self, call_site, values: List[Union[str, int, float, bool]], enclosing_type: Optional[CallSiteReturnType]=None):
-        CallSiteReturnType.__init__(self, call_site, enclosing_type)
+    def __init__(self, semantic_call, values: List[Union[str, int, float, bool]], enclosing_type: Optional[SemanticCallReturnType]=None):
+        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
         self._values = values
 
     def runtime_type(self) -> Type:
         return Literal[self._values]
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[CallSiteReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -47,7 +46,7 @@ class LiteralType(CallSiteReturnType):
         visited.add(self)
         return []
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:

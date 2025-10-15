@@ -2,7 +2,7 @@ import ast
 from typing import Optional, Dict, Set, List, Type, Union
 from types import ModuleType
 
-from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.semantic_call_return_type import SemanticCallReturnType
 from npllm.core.notebook import Cell
 from npllm.core.types.str_type import StrType
 
@@ -10,13 +10,13 @@ import logging
 
 logger = logging.getLogger(__name__)
     
-class DictType(CallSiteReturnType):
+class DictType(SemanticCallReturnType):
     @classmethod
     def from_annotation(
         cls, 
         annotation: ast.Subscript, 
-        call_site, 
-        enclosing_type: Optional[CallSiteReturnType]=None
+        semantic_call, 
+        enclosing_type: Optional[SemanticCallReturnType]=None
     ) -> Optional['DictType']:
         if (
             not isinstance(annotation, ast.Subscript) or 
@@ -26,33 +26,33 @@ class DictType(CallSiteReturnType):
             return None
         
         logger.debug(f"DictType.from_annotation: {ast.dump(annotation)}...")
-        dict_type = DictType(call_site, enclosing_type=enclosing_type)
-        key_type = CallSiteReturnType.from_annotation(annotation.slice.elts[0], call_site, dict_type)
-        value_type = CallSiteReturnType.from_annotation(annotation.slice.elts[1], call_site, dict_type)
+        dict_type = DictType(semantic_call, enclosing_type=enclosing_type)
+        key_type = SemanticCallReturnType.from_annotation(annotation.slice.elts[0], semantic_call, dict_type)
+        value_type = SemanticCallReturnType.from_annotation(annotation.slice.elts[1], semantic_call, dict_type)
         if key_type and value_type:
             if not isinstance(key_type, StrType):
-                raise RuntimeError("Only str key type is supported in Dict")
+                raise RuntimeError(f"Only str key type is supported in Dict: {ast.unparse(annotation)}")
             dict_type._key_type = key_type
             dict_type._value_type = value_type
             logger.debug(f"DictType.from_annotation: {ast.dump(annotation)}")
             return dict_type
-        raise RuntimeError(f"Failed to parse dict type for {ast.dump(annotation)}")
+        raise RuntimeError(f"Failed to parse dict type: {ast.unparse(annotation)}")
 
     def __init__(
         self,
-        call_site,
-        key_type: Optional[CallSiteReturnType]=None, 
-        value_type: Optional[CallSiteReturnType]=None,
-        enclosing_type: Optional[CallSiteReturnType]=None
+        semantic_call,
+        key_type: Optional[SemanticCallReturnType]=None, 
+        value_type: Optional[SemanticCallReturnType]=None,
+        enclosing_type: Optional[SemanticCallReturnType]=None
     ):
-        CallSiteReturnType.__init__(self, call_site, enclosing_type)
+        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
         self._key_type = key_type
         self._value_type = value_type
 
     def runtime_type(self) -> Type:
         return Dict[self._key_type.runtime_type(), self._value_type.runtime_type()]
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[CallSiteReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -63,7 +63,7 @@ class DictType(CallSiteReturnType):
         result.extend(self._value_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:

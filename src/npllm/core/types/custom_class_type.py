@@ -2,7 +2,7 @@ import ast
 from typing import Optional, Dict, Set, List, Type, Union
 from types import ModuleType
 
-from npllm.core.call_site_return_type import CallSiteReturnType
+from npllm.core.semantic_call_return_type import SemanticCallReturnType
 from npllm.core.notebook import Cell
 from npllm.utils.module_util import module_path
 
@@ -10,11 +10,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class CustomClassType(CallSiteReturnType):
+class CustomClassType(SemanticCallReturnType):
     @classmethod
     def _enclosing_custom_class_type(
         cls, 
-        enclosing_type: CallSiteReturnType
+        enclosing_type: SemanticCallReturnType
     ) -> Optional['CustomClassType']:
         current = enclosing_type
         while current:
@@ -27,7 +27,7 @@ class CustomClassType(CallSiteReturnType):
     def _self_referencing_custom_class_type(
         cls, 
         custom_class_cls: Type, 
-        enclosing_type: CallSiteReturnType
+        enclosing_type: SemanticCallReturnType
     ) -> Optional['CustomClassType']:
         current = enclosing_type
         while current:
@@ -43,8 +43,8 @@ class CustomClassType(CallSiteReturnType):
     def from_annotation(
         cls, 
         annotation: ast.Name | ast.Constant, 
-        call_site, 
-        enclosing_type: Optional[CallSiteReturnType]=None
+        semantic_call, 
+        enclosing_type: Optional[SemanticCallReturnType]=None
     ) -> Optional['CustomClassType']:
         class_name = None
         if isinstance(annotation, ast.Name):
@@ -57,9 +57,9 @@ class CustomClassType(CallSiteReturnType):
         if enclosing_custom_class_type:
             enclosing_custom_class = enclosing_custom_class_type._custom_class_cls
         
-        custom_class_cls = call_site.get_class(class_name, enclosing_custom_class)
+        custom_class_cls = semantic_call.get_class(class_name, enclosing_custom_class)
         if not custom_class_cls:
-            raise RuntimeError(f"Cannot find custom class {class_name}")
+            raise RuntimeError(f"Cannot find custom class: {class_name}")
         
         logger.debug(f"CustomClassType.from_annotation: {ast.dump(annotation)}...")
         self_referencing_custom_class_type = cls._self_referencing_custom_class_type(custom_class_cls, enclosing_type)
@@ -67,11 +67,11 @@ class CustomClassType(CallSiteReturnType):
             logger.debug(f"CustomClassType.from_annotation: {class_name} is self-referencing")
             return self_referencing_custom_class_type
         
-        custom_class_source = call_site.get_class_source(custom_class_cls)[0]
+        custom_class_source = semantic_call.get_class_source(custom_class_cls)[0]
         if not custom_class_source:
-            raise RuntimeError(f"Cannot get source of custom class {class_name}")
+            raise RuntimeError(f"Cannot get source of custom class: {class_name}")
 
-        custom_class_type = CustomClassType(call_site, class_name, custom_class_cls, enclosing_type=enclosing_type)
+        custom_class_type = CustomClassType(semantic_call, class_name, custom_class_cls, enclosing_type=enclosing_type)
         logger.debug(f"CustomClassType.from_annotation: early created CustomClassType for {class_name} for self referencing")
 
         field_types = {}
@@ -80,7 +80,7 @@ class CustomClassType(CallSiteReturnType):
                 for stmt in node.body:
                     if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
                         field_name = stmt.target.id
-                        field_type = CallSiteReturnType.from_annotation(stmt.annotation, call_site, custom_class_type)
+                        field_type = SemanticCallReturnType.from_annotation(stmt.annotation, semantic_call, custom_class_type)
                         if not field_type:
                             raise RuntimeError(f"Cannot parse field type for {field_name} in custom class {class_name}")
                         field_types[field_name] = field_type
@@ -89,17 +89,17 @@ class CustomClassType(CallSiteReturnType):
                 logger.debug(f"CustomClassType.from_annotation: {ast.dump(annotation)}")
                 return custom_class_type
 
-        raise RuntimeError(f"Failed to parse custom class {class_name}")
+        raise RuntimeError(f"Failed to parse custom class: {class_name}")
 
     def __init__(
         self,
-        call_site,
+        semantic_call,
         custom_class_name: str, 
         custom_class_cls: Type, 
-        field_types: Optional[Dict[str, CallSiteReturnType]]=None,
-        enclosing_type: Optional[CallSiteReturnType]=None
+        field_types: Optional[Dict[str, SemanticCallReturnType]]=None,
+        enclosing_type: Optional[SemanticCallReturnType]=None
     ):
-        CallSiteReturnType.__init__(self, call_site, enclosing_type)
+        SemanticCallReturnType.__init__(self, semantic_call, enclosing_type)
         self._custom_class_name = custom_class_name
         self._custom_class_cls = custom_class_cls
         self._field_types = field_types or {}
@@ -107,7 +107,7 @@ class CustomClassType(CallSiteReturnType):
     def runtime_type(self) -> Type:
         return self._custom_class_cls
 
-    def get_referenced_custom_classes(self, visited: Optional[Set[CallSiteReturnType]]=None) -> List[Type]:
+    def get_referenced_custom_classes(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> List[Type]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -119,7 +119,7 @@ class CustomClassType(CallSiteReturnType):
             result.extend(field_type.get_referenced_custom_classes(visited))
         return result
 
-    def get_dependent_modules(self, visited: Optional[Set[CallSiteReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
+    def get_dependent_modules(self, visited: Optional[Set[SemanticCallReturnType]]=None) -> Dict[str, Union[ModuleType, Cell]]:
         if visited is None:
             visited = set()
         if self in visited:
@@ -127,7 +127,7 @@ class CustomClassType(CallSiteReturnType):
 
         visited.add(self)
         dependent_modules = {}
-        defining_module = self._call_site.get_cls_defining_module(self._custom_class_cls)
+        defining_module = self._semantic_call.get_cls_defining_module(self._custom_class_cls)
         dependent_modules.update({module_path(defining_module): defining_module})
 
         for field_type in self._field_types.values():
