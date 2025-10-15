@@ -3,31 +3,31 @@ from abc import ABC, abstractmethod
 from typing import List, Type, Set, Tuple
 from dataclasses import dataclass
 
-from npllm.core.call_site import CallSite
+from npllm.core.semantic_call import SemanticCall
 from npllm.utils.source_util import add_line_number
 from npllm.utils.object_util import singleton
 
 @dataclass
-class CodeContext:
+class CallContext:
     source: str
-    call_site_line: int
+    semantic_call_line: int
 
-class CodeContextProvider(ABC):
+class CallContextProvider(ABC):
     @abstractmethod
-    def get_code_context(self, call_site: CallSite) -> CodeContext:
+    def get_call_context(self, semantic_call: SemanticCall) -> CallContext:
         pass
 
 @singleton
-class FunctionCodeContextProvider(CodeContextProvider):
-    def get_code_context(self, call_site: CallSite) -> CodeContext:
-        enclosing_function = call_site.enclosing_function
+class FunctionCallContextProvider(CallContextProvider):
+    def get_call_context(self, semantic_call: SemanticCall) -> CallContext:
+        enclosing_function = semantic_call.enclosing_function
         if not enclosing_function:
-            raise RuntimeError(f"Cannot find enclosing function at {call_site}")
+            raise RuntimeError(f"Cannot find enclosing function at {semantic_call}")
 
-        enclosing_function_source = call_site.enclosing_function_source
+        enclosing_function_source = semantic_call.enclosing_function_source
 
-        return_type = call_site.return_type
-        args_types = call_site.positional_parameters + call_site.keyword_parameters
+        return_type = semantic_call.return_type
+        args_types = semantic_call.positional_parameters + semantic_call.keyword_parameters
 
         referenced_custom_types = []
         referenced_custom_types.extend(return_type.get_referenced_custom_classes())
@@ -40,10 +40,10 @@ class FunctionCodeContextProvider(CodeContextProvider):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)[0]))
+            referenced_custom_types_sources.append((referenced_custom_type, semantic_call.get_class_source(referenced_custom_type)[0]))
 
         code_context = []
-        absolute_line_number = call_site.line_number
+        absolute_line_number = semantic_call.line_number
         relative_line_number = absolute_line_number - enclosing_function.__code__.co_firstlineno + 1
         for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:
             code_context.extend(referenced_custom_type_source.splitlines())
@@ -51,20 +51,20 @@ class FunctionCodeContextProvider(CodeContextProvider):
         
         relative_line_number = relative_line_number + len(code_context)
         code_context.extend(enclosing_function_source.splitlines())
-        return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
+        return CodeContext(source=add_line_number(code_context), semantic_call_line=relative_line_number)
 
 @singleton
 class ClassCodeContextProvider(CodeContextProvider):
-    def get_code_context(self, call_site: CallSite) -> CodeContext:
-        enclosing_class = call_site.enclosing_class
+    def get_code_context(self, semantic_call: SemanticCall) -> CodeContext:
+        enclosing_class = semantic_call.enclosing_class
         if not enclosing_class:
-            raise RuntimeError(f"Cannot find enclosing class at {call_site}")
+            raise RuntimeError(f"Cannot find enclosing class at {semantic_call}")
 
         _, first_line = inspect.getsourcelines(enclosing_class)
-        enclosing_class_source = call_site.enclosing_class_source
+        enclosing_class_source = semantic_call.enclosing_class_source
 
-        return_type = call_site.return_type
-        args_types = call_site.positional_parameters + call_site.keyword_parameters
+        return_type = semantic_call.return_type
+        args_types = semantic_call.positional_parameters + semantic_call.keyword_parameters
 
         referenced_custom_types = []
         referenced_custom_types.extend(return_type.get_referenced_custom_classes())
@@ -77,10 +77,10 @@ class ClassCodeContextProvider(CodeContextProvider):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            referenced_custom_types_sources.append((referenced_custom_type, call_site.get_class_source(referenced_custom_type)[0]))
+            referenced_custom_types_sources.append((referenced_custom_type, semantic_call.get_class_source(referenced_custom_type)[0]))
 
         code_context = []
-        absolute_line_number = call_site.line_number
+        absolute_line_number = semantic_call.line_number
         relative_line_number = absolute_line_number - first_line + 1
         for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:
             code_context.extend(referenced_custom_type_source.splitlines())
@@ -89,13 +89,13 @@ class ClassCodeContextProvider(CodeContextProvider):
         relative_line_number = relative_line_number + len(code_context)
         code_context.extend(enclosing_class_source.splitlines())
 
-        return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
+        return CodeContext(source=add_line_number(code_context), semantic_call_line=relative_line_number)
 
 @singleton
 class ModuleCodeContextProvider(CodeContextProvider):
-    def get_code_context(self, call_site: CallSite) -> CodeContext:
-        return_type = call_site.return_type
-        args_types = call_site.positional_parameters + call_site.keyword_parameters
+    def get_code_context(self, semantic_call: SemanticCall) -> CodeContext:
+        return_type = semantic_call.return_type
+        args_types = semantic_call.positional_parameters + semantic_call.keyword_parameters
 
         referenced_custom_types = []
         referenced_custom_types.extend(return_type.get_referenced_custom_classes())
@@ -108,8 +108,8 @@ class ModuleCodeContextProvider(CodeContextProvider):
             if referenced_custom_type in visited:
                 continue
             visited.add(referenced_custom_type)
-            class_source, class_module = call_site.get_class_source(referenced_custom_type)
-            if class_module != call_site.enclosing_module:
+            class_source, class_module = semantic_call.get_class_source(referenced_custom_type)
+            if class_module != semantic_call.enclosing_module:
                 referenced_custom_types_sources.append((referenced_custom_type, class_source))
 
         code_context = []
@@ -117,6 +117,6 @@ class ModuleCodeContextProvider(CodeContextProvider):
             code_context.extend(referenced_custom_type_source.splitlines())
             code_context.append("")
         
-        relative_line_number = call_site.line_number + len(code_context)
-        code_context.extend(call_site.enclosing_module_source.splitlines())
-        return CodeContext(source=add_line_number(code_context), call_site_line=relative_line_number)
+        relative_line_number = semantic_call.line_number + len(code_context)
+        code_context.extend(semantic_call.enclosing_module_source.splitlines())
+        return CodeContext(source=add_line_number(code_context), semantic_call_line=relative_line_number)

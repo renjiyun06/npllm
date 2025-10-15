@@ -2,7 +2,7 @@ import ast
 import sys
 import inspect
 from types import FrameType, FunctionType, MethodType, ModuleType
-from typing import Optional, Union, Any, List, Tuple, Type, Dict
+from typing import Literal, Optional, Union, Any, List, Tuple, Type, Dict, Set
 from dataclasses import is_dataclass
 
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from npllm.core.semantic_call_contexts.assign_ctx import AssignCtx
 from npllm.core.semantic_call_contexts.if_ctx import IfCtx
 from npllm.core.semantic_call_contexts.return_ctx import ReturnCtx
 from npllm.core.semantic_call_contexts.while_ctx import WhileCtx
-from npllm.utils.source_util import remove_indentation
+from npllm.utils.source_util import remove_indentation, add_line_number
 from npllm.utils.inspect_util import get_class_from_module, is_module_frame
 from npllm.core.notebook import Notebook, Cell
 
@@ -74,6 +74,9 @@ class SemanticCall:
 
         self.dependent_modules: Dict[str, Union[ModuleType, Cell]] = None
 
+        self.call_context: str = None
+        self.line_number_in_call_context: int = None
+
     def initialize(self):
         self._parse_enclosing_function()
         self._parse_enclosing_class()
@@ -92,6 +95,8 @@ class SemanticCall:
         self._parse_keyword_parameters()
 
         self._parse_dependent_modules()
+
+        self._parse_call_context()
 
     def _minimal_enclosing_source_and_relative_line_number(self) -> str:
         if self.enclosing_function:
@@ -288,6 +293,48 @@ class SemanticCall:
             if isinstance(node, ast.Module):
                 self.enclosing_module_def = node
                 return
+
+    def _parse_call_context(self):
+        enclosing_source = None
+        enclosing_type: Literal['class', 'function', 'module'] = None
+        first_line = None
+        if self.enclosing_class:
+            enclosing_source = self.enclosing_class_source
+            enclosing_type = 'class'
+            _, first_line = inspect.getsourcelines(self.enclosing_class)
+        elif self.enclosing_function:
+            enclosing_source = self.enclosing_function_source
+            enclosing_type = 'function'
+            first_line = self.enclosing_function.__code__.co_firstlineno
+        else:
+            enclosing_source = self.enclosing_module_source
+            enclosing_type = 'module'
+            first_line = 1
+
+        referenced_custom_types = []
+        referenced_custom_types.extend(self.return_type.get_referenced_custom_classes())
+        for _, arg_type in self.positional_parameters + self.keyword_parameters:
+            referenced_custom_types.extend(arg_type.get_referenced_custom_classes())
+
+        visited: Set[Type] = set()
+        referenced_custom_types_sources: List[Tuple[Type, str]] = []
+
+        for referenced_custom_type in referenced_custom_types:
+            if referenced_custom_type in visited:
+                continue
+            visited.add(referenced_custom_type)
+            class_source, class_module = self.get_class_source(referenced_custom_type)
+            if enclosing_type != 'module' or class_module != self.enclosing_module:
+                referenced_custom_types_sources.append((referenced_custom_type, class_source))
+
+        call_context = []
+        for _, referenced_custom_type_source in referenced_custom_types_sources[::-1]:
+            call_context.extend(referenced_custom_type_source.splitlines())
+            call_context.append("")
+
+        call_context.extend(enclosing_source.splitlines())
+        self.call_context = add_line_number(call_context)
+        self.line_number_in_call_context = self.line_number - first_line + 1
     
     def get_cls_defining_module(self, cls: Type) -> Optional[Union[ModuleType, Cell]]:
         if hasattr(cls, '__notebook_cell_id__'):

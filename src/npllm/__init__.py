@@ -7,12 +7,13 @@ from typing import Set
 from IPython import get_ipython
 
 from npllm.core.ai import AI
+from npllm.core.execute_engines.bootstrap.bootstrap_execution_engine import BootstrapExecutionEngine
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-_ai = AI()
+_ai = AI(semantic_execute_engine=BootstrapExecutionEngine())
 _enabled = False
 
 _excluded: Set[str] = {

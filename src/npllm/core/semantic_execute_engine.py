@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any, List, Dict
 
-from npllm.core.call_site import CallSite
+from npllm.core.semantic_call import SemanticCall
 
-class CallSiteExecutor(ABC):
+class SemanticExecuteEngine(ABC):
     @abstractmethod
-    async def execute(self, call_site: CallSite, args: List[Any], kwargs: Dict[str, Any]) -> Any:
+    async def execute(self, semantic_call: SemanticCall, args: List[Any], kwargs: Dict[str, Any]) -> Any:
         pass

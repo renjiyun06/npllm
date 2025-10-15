@@ -4,20 +4,16 @@ import os
 from types import FrameType
 from typing import Any, Callable
 
-from npllm.core.call_site import CallSite
-from npllm.core.call_site_executor import CallSiteExecutor
+from npllm.core.semantic_call import SemanticCall
+from npllm.core.semantic_execute_engine import SemanticExecuteEngine
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 class AI:
-    def __init__(self, call_site_executor: CallSiteExecutor=None):
-        if call_site_executor is None:
-            import npllm.agent.agent_executor
-            call_site_executor = npllm.agent.agent_executor.AgentExecutor()
-
-        self._call_site_executor = call_site_executor
+    def __init__(self, semantic_execute_engine: SemanticExecuteEngine):
+        self._semantic_execute_engine = semantic_execute_engine
 
     def __getattr__(self, method_name: str) -> Callable:
 
@@ -35,8 +31,8 @@ class AI:
             raise RuntimeError("Cannot find caller frame outside LLM class")
         
         async def ai_method_handler(*args, **kwargs) -> Any:
-            call_site = CallSite.of(caller_frame(), method_name, kwargs['__is_async__'], debug=True)
-            return await self._call_site_executor.execute(call_site, args, kwargs)
+            semantic_call = SemanticCall.of(caller_frame(), method_name, kwargs['__is_async__'], debug=True)
+            return await self._semantic_execute_engine.execute(semantic_call, args, kwargs)
         
         def ai_method_handler_sync(*args, **kwargs) -> Any:
             event_loop = asyncio._get_running_loop()
