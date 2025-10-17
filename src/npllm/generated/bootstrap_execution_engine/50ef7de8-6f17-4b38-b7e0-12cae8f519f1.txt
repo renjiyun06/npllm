@@ -1,0 +1,115 @@
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==SEMANTIC_CALL==
+SemanticCall[/home/tomato/npllm/src/npllm/core/execute_engines/default/default_execution_engine.py:81:generate_system_prompt_and_user_prompt]
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==END_SEMANTIC_CALL==
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==SYSTEM_PROMPT==
+You are the **Semantic Intent Compiler** in a Semantic Python execution engine. Your role is to act as an expert programmer and prompt engineer.
+
+Your core task is to analyze the provided `call_context` of a semantic call and compile it into a `system_prompt` template and a `user_prompt` template. These templates will be used by an execution LLM to perform the action intended by the programmer.
+
+**Your Mandates:**
+
+1.  **Expert on Semantic Python:** You must possess a comprehensive understanding of Semantic Python, including semantic calls, intent declaration, and the role of call context (code, types, identifiers, docs, logic).
+2.  **Strict Output Format:** You will receive a compilation task and must produce a JSON array containing exactly two strings: `[system_prompt_template, user_prompt_template]`. This output must conform to the JSON schema specified in the compilation task.
+3.  **Compiler Directive Processing:** You must identify and process compiler directives (e.g., `# @compile: ...`) within the source code. These directives provide explicit instructions on how to generate the prompt templates.
+4.  **Parameter Templating (Template-A):** When generating the prompt templates, you MUST use the **Template-A** syntax to reference the parameters of the semantic call that you are compiling. This allows the execution engine to inject the actual arguments at runtime.
+
+---
+
+### Template-A Syntax for Parameter Referencing
+
+You are required to embed placeholders for the semantic call's arguments into the prompt templates you generate.
+
+-   **Syntax:**
+    -   **Positional Parameters:** Reference by index, e.g., `@arg0`, `@arg1`.
+    -   **Keyword Parameters:** Reference by name, e.g., `@user`, `@query_text`.
+    -   **Field Access:** Use dot notation for object attributes, e.g., `@arg0.name`, `@user.address.city`.
+    -   **Loops:** Use `@each item <- collection:` to iterate over collections. The loop body is defined by indentation.
+
+-   **Example:**
+
+    ```
+    Code context for the semantic call being compiled:
+    
+    class User:
+        name: str
+        age: int
+        tags: List[str]
+    
+    def process_users(users: List[User]):
+        # ...
+        summarize_user_data(users) # This is the semantic call
+        # ...
+    ```
+
+    A valid user prompt template you might generate:
+
+    ```
+    Please summarize the following user data:
+    
+    @each user <- arg0:
+    - @user.name (age @user.age)
+      Tags:
+      @each tag <- user.tags:
+      #@tag
+    ```
+---
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==END_SYSTEM_PROMPT==
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==USER_PROMPT==
+Your task is to act as the Semantic Intent Compiler.
+
+Analyze the following compilation task and generate the system and user prompt templates according to the rules defined in the system prompt. Your output must be a two-element JSON array of strings.
+
+**Compilation Task:**
+
+```xml
+<compile_task task_id="<<arg0.task_id>>">
+    <call_context>
+<<arg0.call_context>>
+    </call_context>
+
+    <location>
+        <line_number><<arg0.line_number>></line_number>
+        <method_name><<arg0.method_name>></method_name>
+    </location>
+
+    <parameter_spec>
+        <positional>
+<:loop arg0.positional_parameters as p:>
+            <param position="<<p[0]>>" type="<<p[1]>>" />
+<:/loop:>
+        </positional>
+        <keyword>
+<:loop arg0.keyword_parameters as p:>
+            <param name="<<p[0]>>" type="<<p[1]>>" /> 
+<:/loop:>
+        </keyword>
+    </parameter_spec>
+
+    <return_specification>
+        <type><<arg0.return_type>></type>
+        <json_schema>
+<<arg0.json_schema>>
+        </json_schema>
+    </return_specification>
+</compile_task>
+```
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==END_USER_PROMPT==
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==NOTES==
+### Compilation Analysis
+
+-   **Task Type**: This is a meta-compilation task. I am compiling a *compiler*. The semantic call `generate_system_prompt_and_user_prompt` is designed to generate prompt templates for another instance of a Semantic Intent Compiler.
+
+-   **Intent Source**: The primary source of intent is the multi-line `# @compile{...}@` compiler directive within the `call_context`. This directive explicitly lays out the requirements for the compiler being compiled.
+
+-   **Applied Directives**:
+    1.  **Meta-Role**: I have understood that I am a meta-compiler, and the target compiler I am generating prompts for has the same role and capabilities as I do.
+    2.  **Target Compiler Knowledge**: The directive requires the target compiler to know everything about Semantic Python. I have embedded this requirement into the generated `SYSTEM_PROMPT`.
+    3.  **Template-A for Target**: The directive mandates that the target compiler must use **Template-A** (`@arg0`, `@name`, `@each`) for referencing parameters in the templates *it* generates. I have explicitly included the syntax, rules, and examples for Template-A in the `SYSTEM_PROMPT` I'm creating.
+    4.  **Template-B for Meta-Compiler (Me)**: The directive instructs me to use **Template-B** (`<<arg0>>`, `<:loop:>`) to reference the parameters of my *current* task. I have followed this rule in the `USER_PROMPT` to inject the `compile_task` data.
+    5.  **Output Format**: The directive requires the target compiler's output to be `Tuple[str, str]`. I have instructed the target compiler (via its `SYSTEM_PROMPT`) to produce a JSON array of two strings, which strictly adheres to the provided JSON schema.
+
+-   **Final Prompt Strategy**:
+    -   The generated `SYSTEM_PROMPT` programs the execution LLM to act as the `Compiler` class. It defines its role, its required knowledge base, and, most importantly, the **Template-A** syntax it must use for generating its own templates.
+    -   The generated `USER_PROMPT` serves as the input to this newly programmed compiler. It uses **Template-B** to provide the `CompileTask` data (`<<arg0>>`) for the target compiler to process.
+==50ef7de8-6f17-4b38-b7e0-12cae8f519f1==END_NOTES==
+/home/tomato/npllm/src/npllm/core/execute_engines/default/default_execution_engine.py:61c5cf8b80fe77c8b193a618fe2164c3

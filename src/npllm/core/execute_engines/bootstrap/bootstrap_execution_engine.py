@@ -49,7 +49,6 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
         with resources.open_text("npllm.core.execute_engines.bootstrap", "compile_prompt.md") as f:
             self._compile_prompt = f.read()
 
-        # semantic call unique key -> cache item
         self._compilation_cache: Dict[str, CacheItem] = {}
         self._load_compilation_cache()
 
