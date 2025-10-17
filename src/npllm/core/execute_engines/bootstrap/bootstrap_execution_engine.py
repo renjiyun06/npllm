@@ -6,9 +6,9 @@ from litellm import acompletion
 from jinja2 import Template
 
 from npllm.core.semantic_execute_engine import SemanticExecuteEngine
-from npllm.core.semantic_call import SemanticCall
+from npllm.core.semantic_call import SemanticCall, SemanticCallId
 from typing import Callable, List, Any, Dict, Tuple
-
+from npllm.utils.module_util import module_hash
 from npllm.utils.json_util import parse_json_str
 
 import logging
@@ -16,11 +16,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CacheItem:
-    def __init__(self, system_prompt_template: str, user_prompt_template: str):
+    def __init__(self, system_prompt_template: str, user_prompt_template: str, notes: str, dependent_modules: Dict[str, str]):
         self.system_prompt_template = system_prompt_template
         self.user_prompt_template = user_prompt_template
+        self.notes = notes
+
+        # module filename -> module hash
+        self.dependent_modules = dependent_modules
 
     def check_valid(self, semantic_call: SemanticCall) -> bool:
+        current_dependent_modules = semantic_call.dependent_modules
+        if len(current_dependent_modules) != len(self.dependent_modules):
+            return False
+        
+        for module_filename, dependent_module in current_dependent_modules.items():
+            if module_filename not in self.dependent_modules:
+                return False
+            if module_hash(dependent_module) != self.dependent_modules[module_filename]:
+                return False
         return True
 
 class BootstrapExecutionEngine(SemanticExecuteEngine):
@@ -36,16 +49,62 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
         with resources.open_text("npllm.core.execute_engines.bootstrap", "compile_prompt.md") as f:
             self._compile_prompt = f.read()
 
-        self._compilation_cache: Dict[SemanticCall, CacheItem] = {}
+        # semantic call unique key -> cache item
+        self._compilation_cache: Dict[SemanticCallId, CacheItem] = {}
         self._load_compilation_cache()
 
         self._template_placeholder_handler = template_placeholder_handler
 
     def _load_compilation_cache(self):
-        pass
+        for file in resources.files("npllm.generated.bootstrap_execution_engine").iterdir():
+            if file.is_file() and file.name.endswith(".txt"):
+                compile_task_id = file.name.replace(".txt", "")
+                dependent_modules = {}
+                with open(file, "r", encoding="utf-8") as f:
+                    content = f.read()
 
-    def _save_compilation_cache(self, semantic_call: SemanticCall, cache_item: CacheItem):
+                    semantic_call_id_start = f"=={compile_task_id}==SEMANTIC_CALL_ID=="
+                    semantic_call_id_end = f"=={compile_task_id}==END_SEMANTIC_CALL_ID=="
+                    semantic_call_id_record = content[content.find(semantic_call_id_start) + len(semantic_call_id_start):content.find(semantic_call_id_end)].strip()
+                    semantic_call_id = SemanticCallId.from_file_record(semantic_call_id_record)
+
+                    system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT=="   
+                    system_prompt_start_index = content.find(system_prompt_start)
+                    notes_end = f"=={compile_task_id}==END_NOTES=="
+                    notes_end_index = content.find(notes_end) + len(notes_end)
+                    system_prompt, user_prompt, notes = self._parse_templates(content[system_prompt_start_index:notes_end_index], compile_task_id)
+                    dependent_modules = {}
+                    for module_and_hash in content[notes_end_index:].split("\n"):
+                        if module_and_hash.strip():
+                            module_filename, module_hash = module_and_hash.split(":")
+                            dependent_modules[module_filename] = module_hash
+                    
+                    self._compilation_cache[semantic_call_id] = CacheItem(system_prompt, user_prompt, notes, dependent_modules)
+
+
+    def _parse_templates(self, content: str, compile_task_id: str) -> Tuple[str, str, str]:
+        system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT=="
+        system_prompt_end = f"=={compile_task_id}==END_SYSTEM_PROMPT=="
+        user_prompt_start = f"=={compile_task_id}==USER_PROMPT=="
+        user_prompt_end = f"=={compile_task_id}==END_USER_PROMPT=="
+        notes_start = f"=={compile_task_id}==NOTES=="
+        notes_end = f"=={compile_task_id}==END_NOTES=="
+        system_prompt = content[content.find(system_prompt_start) + len(system_prompt_start):content.find(system_prompt_end)].strip()
+        user_prompt = content[content.find(user_prompt_start) + len(user_prompt_start):content.find(user_prompt_end)].strip()
+        notes = content[content.find(notes_start) + len(notes_start):content.find(notes_end)].strip()
+        return system_prompt, user_prompt, notes
+
+    def _save_compilation_cache(self, semantic_call: SemanticCall, cache_item: CacheItem, compile_task_id: str):
         self._compilation_cache[semantic_call] = cache_item
+        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
+        with resources.path("npllm.generated.bootstrap_execution_engine", f"{compile_task_id}.txt") as cache_file_path:
+            with open(cache_file_path, "w", encoding="utf-8") as f:
+                f.write(f"=={compile_task_id}==SEMANTIC_CALL_ID==\n{semantic_call_id.to_file_record()}\n=={compile_task_id}==END_SEMANTIC_CALL_ID==\n")
+                f.write(f"=={compile_task_id}==SYSTEM_PROMPT==\n{cache_item.system_prompt_template}\n=={compile_task_id}==END_SYSTEM_PROMPT==\n")
+                f.write(f"=={compile_task_id}==USER_PROMPT==\n{cache_item.user_prompt_template}\n=={compile_task_id}==END_USER_PROMPT==\n")
+                f.write(f"=={compile_task_id}==NOTES==\n{cache_item.notes}\n=={compile_task_id}==END_NOTES==\n")
+                for module_filename, module_hash in cache_item.dependent_modules.items():
+                    f.write(f"{module_filename}:{module_hash}\n")
 
     async def execute(self, semantic_call: SemanticCall, args: List[Any], kwargs: Dict[str, Any]) -> Any:
         system_prompt_template, user_prompt_template = await self._compile(semantic_call)
@@ -72,8 +131,9 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
         return value
 
     async def _compile(self, semantic_call: SemanticCall) -> Tuple[str, str]:
-        if semantic_call in self._compilation_cache:
-            cache_item = self._compilation_cache[semantic_call]
+        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
+        if semantic_call_id in self._compilation_cache:
+            cache_item = self._compilation_cache[semantic_call_id]
             if cache_item.check_valid(semantic_call):
                 logger.info(f"Using cached compilation for {semantic_call}")
                 return cache_item.system_prompt_template, cache_item.user_prompt_template
@@ -126,15 +186,14 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
         
         if response_content.startswith("```"):
             response_content = response_content[len("```"):-len("```")].strip()
+
+        system_prompt, user_prompt, notes = self._parse_templates(response_content, compile_task_id)
         
-        system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT=="
-        system_prompt_end = f"=={compile_task_id}==END_SYSTEM_PROMPT=="
-        user_prompt_start = f"=={compile_task_id}==USER_PROMPT=="
-        user_prompt_end = f"=={compile_task_id}==END_USER_PROMPT=="
-
-        system_prompt = response_content[response_content.find(system_prompt_start) + len(system_prompt_start):response_content.find(system_prompt_end)].strip()
-        user_prompt = response_content[response_content.find(user_prompt_start) + len(user_prompt_start):response_content.find(user_prompt_end)].strip()
-
         logger.info(f"Successfully compiled {semantic_call} with task {compile_task_id}")
-        self._save_compilation_cache(semantic_call, CacheItem(system_prompt, user_prompt))
+
+        self._save_compilation_cache(
+            semantic_call, 
+            CacheItem(system_prompt, user_prompt, notes, {module_filename: module_hash(module) for module_filename, module in semantic_call.dependent_modules.items()}),
+            compile_task_id
+        )
         return system_prompt, user_prompt

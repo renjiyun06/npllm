@@ -3,7 +3,7 @@ import sys
 import inspect
 from types import FrameType, FunctionType, MethodType, ModuleType
 from typing import Literal, Optional, Union, Any, List, Tuple, Type, Dict, Set
-from dataclasses import is_dataclass
+from dataclasses import is_dataclass, dataclass
 
 from pydantic import BaseModel
 
@@ -24,12 +24,19 @@ logger = logging.getLogger(__name__)
 
 class SemanticCall:
 
+    _cache: Dict['SemanticCall', 'SemanticCall'] = {}
+
     @classmethod
     def of(cls, caller_frame: FrameType, method_name: str, is_async: bool, debug=False) -> 'SemanticCall':
         semantic_call = cls(caller_frame, method_name, is_async)
+        if semantic_call in cls._cache and not debug:
+            logger.info(f"Returning cached {semantic_call}")
+            return cls._cache[semantic_call]
+
         logger.info(f"Initializing {semantic_call}")
         semantic_call.initialize()
         logger.info(f"Initialized {semantic_call}")
+        cls._cache[semantic_call] = semantic_call
         return semantic_call
 
     def __init__(
@@ -393,3 +400,35 @@ class SemanticCall:
 
     def __str__(self) -> str:
         return f"SemanticCall[{self.module_filename}:{self.line_number}:{self.method_name}]"
+
+
+@dataclass
+class SemanticCallId:
+    module_filename: str
+    line_number: int
+    method_name: str
+
+    def __hash__(self) -> int:
+        return hash((self.module_filename, self.line_number, self.method_name))
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, SemanticCallId):
+            return False
+
+        return (
+            self.module_filename == other.module_filename and 
+            self.line_number == other.line_number and 
+            self.method_name == other.method_name
+        )
+
+    def to_file_record(self) -> str:
+        return f"{self.module_filename}:{self.line_number}:{self.method_name}"
+
+    @classmethod
+    def from_file_record(cls, record: str) -> 'SemanticCallId':
+        module_filename, line_number, method_name = record.split(":")
+        return cls(module_filename, line_number, method_name)
+
+    @classmethod
+    def from_semantic_call(cls, semantic_call: 'SemanticCall') -> 'SemanticCallId':
+        return cls(semantic_call.module_filename, semantic_call.line_number, semantic_call.method_name)

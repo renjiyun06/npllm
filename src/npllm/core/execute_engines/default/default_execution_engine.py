@@ -1,4 +1,5 @@
 import uuid
+from importlib import resources
 from typing import List, Any, Dict, Tuple
 from dataclasses import dataclass
 
@@ -6,10 +7,12 @@ from litellm import acompletion
 
 from npllm.core.ai import AI
 from npllm.core.semantic_execute_engine import SemanticExecuteEngine
-from npllm.core.semantic_call import SemanticCall
+from npllm.core.semantic_call import SemanticCall, SemanticCallId
 from npllm.core.execute_engines.bootstrap.bootstrap_execution_engine import BootstrapExecutionEngine
 from npllm.utils.json_util import parse_json_str
 from npllm.utils.template_placeholder_util import jinja2_placeholder_handler
+
+from npllm.utils.module_util import module_hash
 
 import logging
 logger = logging.getLogger(__name__)
@@ -65,25 +68,103 @@ class Compiler(AI):
         """
         return await self.generate_system_prompt_and_user_prompt(compile_task)
 
+@dataclass
+class CacheItem:
+    system_prompt_template: str
+    user_prompt_template: str
+    dependent_modules: Dict[str, str]
+
+    def check_valid(self, semantic_call: SemanticCall) -> bool:
+        current_dependent_modules = semantic_call.dependent_modules
+        if len(current_dependent_modules) != len(self.dependent_modules):
+            return False
+        
+        for module_filename, dependent_module in current_dependent_modules.items():
+            if module_filename not in self.dependent_modules:
+                return False
+            if module_hash(dependent_module) != self.dependent_modules[module_filename]:
+                return False
+        return True
+
 class DefaultExecutionEngine(SemanticExecuteEngine):
     def __init__(self, execution_model: str="openrouter/google/gemini-2.5-flash"):
         self._compiler = Compiler()
         self._execution_model = execution_model
         self._template_placeholder_handler = jinja2_placeholder_handler
+        
+        self._compilation_cache: Dict[SemanticCallId, CacheItem] = {}
+        self._load_compilation_cache()
+
+    def _load_compilation_cache(self):
+        for file in resources.files("npllm.generated.default_execution_engine").iterdir():
+            if file.is_file() and file.name.endswith(".txt"):
+                compile_task_id = file.name.replace(".txt", "")
+                with open(file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    
+                    semantic_call_id_start = f"=={compile_task_id}==SEMANTIC_CALL_ID=="
+                    semantic_call_id_end = f"=={compile_task_id}==END_SEMANTIC_CALL_ID=="
+                    semantic_call_id_record = content[content.find(semantic_call_id_start) + len(semantic_call_id_start):content.find(semantic_call_id_end)].strip()
+                    semantic_call_id = SemanticCallId.from_file_record(semantic_call_id_record)
+                    
+                    system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT==" 
+                    system_prompt_start_index = content.find(system_prompt_start)
+                    system_prompt_end = f"=={compile_task_id}==END_SYSTEM_PROMPT=="
+                    system_prompt_end_index = content.find(system_prompt_end)
+                    system_prompt = content[system_prompt_start_index:system_prompt_end_index].strip()
+
+                    user_prompt_start = f"=={compile_task_id}==USER_PROMPT=="
+                    user_prompt_start_index = content.find(user_prompt_start)
+                    user_prompt_end = f"=={compile_task_id}==END_USER_PROMPT=="
+                    user_prompt_end_index = content.find(user_prompt_end)
+                    user_prompt = content[user_prompt_start_index:user_prompt_end_index].strip()
+
+                    dependent_modules = {}
+                    for module_and_hash in content[user_prompt_end_index+len(user_prompt_end):].split("\n"):
+                        if module_and_hash.strip():
+                            module_filename, module_hash = module_and_hash.split(":")
+                            dependent_modules[module_filename] = module_hash
+                    
+                    self._compilation_cache[semantic_call_id] = CacheItem(system_prompt, user_prompt, dependent_modules)
+
+    def _save_compilation_cache(self, semantic_call: SemanticCall, cache_item: CacheItem, compile_task_id: str):
+        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
+        self._compilation_cache[semantic_call_id] = cache_item
+        with resources.path("npllm.generated.default_execution_engine", f"{compile_task_id}.txt") as cache_file_path:
+            with open(cache_file_path, "w", encoding="utf-8") as f:
+                f.write(f"=={compile_task_id}==SEMANTIC_CALL_ID==\n{semantic_call_id.to_file_record()}\n=={compile_task_id}==END_SEMANTIC_CALL_ID==\n")
+                f.write(f"=={compile_task_id}==SYSTEM_PROMPT==\n{cache_item.system_prompt_template}\n=={compile_task_id}==END_SYSTEM_PROMPT==\n")   
+                f.write(f"=={compile_task_id}==USER_PROMPT==\n{cache_item.user_prompt_template}\n=={compile_task_id}==END_USER_PROMPT==\n")
+                for module_filename, module_hash in cache_item.dependent_modules.items():
+                    f.write(f"{module_filename}:{module_hash}\n")
 
     async def execute(self, semantic_call: SemanticCall, args: List[Any], kwargs: Dict[str, Any]) -> Any:
-        task_id = str(uuid.uuid4())
-        compile_task = CompileTask(
-            task_id=task_id,
-            call_context=semantic_call.call_context,
-            line_number=semantic_call.line_number_in_call_context,
-            method_name=semantic_call.method_name,
-            positional_parameters=semantic_call.positional_parameters,
-            keyword_parameters=semantic_call.keyword_parameters,
-            return_type=semantic_call.return_type,
-            json_schema=semantic_call.return_type.json_schema()
-        )
-        system_prompt_template, user_prompt_template = await self._compiler.compile(compile_task)
+        system_prompt_template = None
+        user_prompt_template = None
+        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
+        if semantic_call_id in self._compilation_cache:
+            cache_item = self._compilation_cache[semantic_call_id]
+            if cache_item.check_valid(semantic_call):
+                logger.info(f"Using cached compilation for {semantic_call}")
+                system_prompt_template = cache_item.system_prompt_template
+                user_prompt_template = cache_item.user_prompt_template
+
+        if system_prompt_template is None or user_prompt_template is None:
+            logger.info(f"No cached compilation found for {semantic_call}, compiling from scratch")
+            task_id = str(uuid.uuid4())
+            compile_task = CompileTask(
+                task_id=task_id,
+                call_context=semantic_call.call_context,
+                line_number=semantic_call.line_number_in_call_context,
+                method_name=semantic_call.method_name,
+                positional_parameters=semantic_call.positional_parameters,
+                keyword_parameters=semantic_call.keyword_parameters,
+                return_type=semantic_call.return_type,
+                json_schema=semantic_call.return_type.json_schema()
+            )
+            system_prompt_template, user_prompt_template = await self._compiler.compile(compile_task)
+            self._save_compilation_cache(semantic_call, CacheItem(system_prompt_template, user_prompt_template, {module_filename: module_hash(module) for module_filename, module in semantic_call.dependent_modules.items()}), task_id)
+
         system_prompt = self._template_placeholder_handler(system_prompt_template, args, kwargs)
         user_prompt = self._template_placeholder_handler(user_prompt_template, args, kwargs)
 
