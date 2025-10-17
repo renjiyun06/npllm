@@ -6,7 +6,7 @@ from litellm import acompletion
 from jinja2 import Template
 
 from npllm.core.semantic_execute_engine import SemanticExecuteEngine
-from npllm.core.semantic_call import SemanticCall, SemanticCallId
+from npllm.core.semantic_call import SemanticCall
 from typing import Callable, List, Any, Dict, Tuple
 from npllm.utils.module_util import module_hash
 from npllm.utils.json_util import parse_json_str
@@ -50,7 +50,7 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
             self._compile_prompt = f.read()
 
         # semantic call unique key -> cache item
-        self._compilation_cache: Dict[SemanticCallId, CacheItem] = {}
+        self._compilation_cache: Dict[str, CacheItem] = {}
         self._load_compilation_cache()
 
         self._template_placeholder_handler = template_placeholder_handler
@@ -63,10 +63,9 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
                 with open(file, "r", encoding="utf-8") as f:
                     content = f.read()
 
-                    semantic_call_id_start = f"=={compile_task_id}==SEMANTIC_CALL_ID=="
-                    semantic_call_id_end = f"=={compile_task_id}==END_SEMANTIC_CALL_ID=="
-                    semantic_call_id_record = content[content.find(semantic_call_id_start) + len(semantic_call_id_start):content.find(semantic_call_id_end)].strip()
-                    semantic_call_id = SemanticCallId.from_file_record(semantic_call_id_record)
+                    semantic_call_start = f"=={compile_task_id}==SEMANTIC_CALL=="
+                    semantic_call_end = f"=={compile_task_id}==END_SEMANTIC_CALL=="
+                    semantic_call = content[content.find(semantic_call_start) + len(semantic_call_start):content.find(semantic_call_end)].strip()
 
                     system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT=="   
                     system_prompt_start_index = content.find(system_prompt_start)
@@ -79,8 +78,7 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
                             module_filename, module_hash = module_and_hash.split(":")
                             dependent_modules[module_filename] = module_hash
                     
-                    self._compilation_cache[semantic_call_id] = CacheItem(system_prompt, user_prompt, notes, dependent_modules)
-
+                    self._compilation_cache[semantic_call] = CacheItem(system_prompt, user_prompt, notes, dependent_modules)
 
     def _parse_templates(self, content: str, compile_task_id: str) -> Tuple[str, str, str]:
         system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT=="
@@ -96,10 +94,9 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
 
     def _save_compilation_cache(self, semantic_call: SemanticCall, cache_item: CacheItem, compile_task_id: str):
         self._compilation_cache[semantic_call] = cache_item
-        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
         with resources.path("npllm.generated.bootstrap_execution_engine", f"{compile_task_id}.txt") as cache_file_path:
             with open(cache_file_path, "w", encoding="utf-8") as f:
-                f.write(f"=={compile_task_id}==SEMANTIC_CALL_ID==\n{semantic_call_id.to_file_record()}\n=={compile_task_id}==END_SEMANTIC_CALL_ID==\n")
+                f.write(f"=={compile_task_id}==SEMANTIC_CALL==\n{semantic_call}\n=={compile_task_id}==END_SEMANTIC_CALL==\n")
                 f.write(f"=={compile_task_id}==SYSTEM_PROMPT==\n{cache_item.system_prompt_template}\n=={compile_task_id}==END_SYSTEM_PROMPT==\n")
                 f.write(f"=={compile_task_id}==USER_PROMPT==\n{cache_item.user_prompt_template}\n=={compile_task_id}==END_USER_PROMPT==\n")
                 f.write(f"=={compile_task_id}==NOTES==\n{cache_item.notes}\n=={compile_task_id}==END_NOTES==\n")
@@ -131,9 +128,8 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
         return value
 
     async def _compile(self, semantic_call: SemanticCall) -> Tuple[str, str]:
-        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
-        if semantic_call_id in self._compilation_cache:
-            cache_item = self._compilation_cache[semantic_call_id]
+        if str(semantic_call) in self._compilation_cache:
+            cache_item = self._compilation_cache[str(semantic_call)]
             if cache_item.check_valid(semantic_call):
                 logger.info(f"Using cached compilation for {semantic_call}")
                 return cache_item.system_prompt_template, cache_item.user_prompt_template

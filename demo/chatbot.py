@@ -25,7 +25,7 @@ class ChatMessage:
 
 class ChatBot(AI):
     def __init__(self):
-        AI.__init__(self, semantic_execute_engine=DefaultExecutionEngine())
+        AI.__init__(self, semantic_execute_engine=DefaultExecutionEngine(compile_model="openrouter/google/gemini-2.5-pro"))
         self._prompt_session = PromptSession()
         self._history: List[ChatMessage] = []
 

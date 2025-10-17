@@ -7,7 +7,7 @@ from litellm import acompletion
 
 from npllm.core.ai import AI
 from npllm.core.semantic_execute_engine import SemanticExecuteEngine
-from npllm.core.semantic_call import SemanticCall, SemanticCallId
+from npllm.core.semantic_call import SemanticCall
 from npllm.core.execute_engines.bootstrap.bootstrap_execution_engine import BootstrapExecutionEngine
 from npllm.utils.json_util import parse_json_str
 from npllm.utils.template_placeholder_util import jinja2_placeholder_handler
@@ -29,12 +29,13 @@ class CompileTask:
     json_schema: str  # the JSON schema of the return value of the semantic call 
 
 class Compiler(AI):
-    def __init__(self):
+    def __init__(self, execution_model: str="openrouter/google/gemini-2.5-pro"):
         AI.__init__(self, semantic_execute_engine=BootstrapExecutionEngine(
             compile_model="openrouter/google/gemini-2.5-pro",
-            execution_model="openrouter/google/gemini-2.5-pro",
+            execution_model=execution_model,
             template_placeholder_handler=jinja2_placeholder_handler
         ))
+        
 
     async def compile(self, compile_task: CompileTask) -> Tuple[str, str]:
         """
@@ -63,7 +64,7 @@ class Compiler(AI):
            - 始终使用 arg0 代表 compile_task 这个参数, 因为它是一个位置参数.
            - 字段引用格式: {{arg0.field_name}}
            - 可以使用 jinja2 模版语言对一些字段值进行展开
-        6. 如果你在给该编译器生成的提示词中使用了形如 `{{...}}` 的结构表述, 而该结构并不需要使用 jinja2 模版语言进行展开, 那么你必须将该结构放置在 raw 标签下, 如:
+        6. **非常重要**: 如果你在给该编译器生成的提示词中使用了形如 `{{...}}` 的结构表述, 而该结构并不需要使用 jinja2 模版语言进行展开, 那么你必须将该结构放置在 raw 标签下, 如:
            {% raw %}{{...}}{% endraw %}
         """
         return await self.generate_system_prompt_and_user_prompt(compile_task)
@@ -87,12 +88,16 @@ class CacheItem:
         return True
 
 class DefaultExecutionEngine(SemanticExecuteEngine):
-    def __init__(self, execution_model: str="openrouter/google/gemini-2.5-flash"):
-        self._compiler = Compiler()
+    def __init__(
+        self, 
+        compile_model: str="openrouter/google/gemini-2.5-flash", 
+        execution_model: str="openrouter/google/gemini-2.5-flash"
+    ):
+        self._compiler = Compiler(execution_model=compile_model)
         self._execution_model = execution_model
         self._template_placeholder_handler = jinja2_placeholder_handler
         
-        self._compilation_cache: Dict[SemanticCallId, CacheItem] = {}
+        self._compilation_cache: Dict[str, CacheItem] = {}
         self._load_compilation_cache()
 
     def _load_compilation_cache(self):
@@ -102,10 +107,9 @@ class DefaultExecutionEngine(SemanticExecuteEngine):
                 with open(file, "r", encoding="utf-8") as f:
                     content = f.read()
                     
-                    semantic_call_id_start = f"=={compile_task_id}==SEMANTIC_CALL_ID=="
-                    semantic_call_id_end = f"=={compile_task_id}==END_SEMANTIC_CALL_ID=="
-                    semantic_call_id_record = content[content.find(semantic_call_id_start) + len(semantic_call_id_start):content.find(semantic_call_id_end)].strip()
-                    semantic_call_id = SemanticCallId.from_file_record(semantic_call_id_record)
+                    semantic_call_start = f"=={compile_task_id}==SEMANTIC_CALL=="
+                    semantic_call_end = f"=={compile_task_id}==END_SEMANTIC_CALL=="
+                    semantic_call = content[content.find(semantic_call_start) + len(semantic_call_start):content.find(semantic_call_end)].strip()
                     
                     system_prompt_start = f"=={compile_task_id}==SYSTEM_PROMPT==" 
                     system_prompt_start_index = content.find(system_prompt_start)
@@ -125,14 +129,13 @@ class DefaultExecutionEngine(SemanticExecuteEngine):
                             module_filename, module_hash = module_and_hash.split(":")
                             dependent_modules[module_filename] = module_hash
                     
-                    self._compilation_cache[semantic_call_id] = CacheItem(system_prompt, user_prompt, dependent_modules)
+                    self._compilation_cache[semantic_call] = CacheItem(system_prompt, user_prompt, dependent_modules)
 
     def _save_compilation_cache(self, semantic_call: SemanticCall, cache_item: CacheItem, compile_task_id: str):
-        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
-        self._compilation_cache[semantic_call_id] = cache_item
+        self._compilation_cache[str(semantic_call)] = cache_item
         with resources.path("npllm.generated.default_execution_engine", f"{compile_task_id}.txt") as cache_file_path:
             with open(cache_file_path, "w", encoding="utf-8") as f:
-                f.write(f"=={compile_task_id}==SEMANTIC_CALL_ID==\n{semantic_call_id.to_file_record()}\n=={compile_task_id}==END_SEMANTIC_CALL_ID==\n")
+                f.write(f"=={compile_task_id}==SEMANTIC_CALL==\n{semantic_call}\n=={compile_task_id}==END_SEMANTIC_CALL==\n")
                 f.write(f"=={compile_task_id}==SYSTEM_PROMPT==\n{cache_item.system_prompt_template}\n=={compile_task_id}==END_SYSTEM_PROMPT==\n")   
                 f.write(f"=={compile_task_id}==USER_PROMPT==\n{cache_item.user_prompt_template}\n=={compile_task_id}==END_USER_PROMPT==\n")
                 for module_filename, module_hash in cache_item.dependent_modules.items():
@@ -141,9 +144,8 @@ class DefaultExecutionEngine(SemanticExecuteEngine):
     async def execute(self, semantic_call: SemanticCall, args: List[Any], kwargs: Dict[str, Any]) -> Any:
         system_prompt_template = None
         user_prompt_template = None
-        semantic_call_id = SemanticCallId.from_semantic_call(semantic_call)
-        if semantic_call_id in self._compilation_cache:
-            cache_item = self._compilation_cache[semantic_call_id]
+        if str(semantic_call) in self._compilation_cache:
+            cache_item = self._compilation_cache[str(semantic_call)]
             if cache_item.check_valid(semantic_call):
                 logger.info(f"Using cached compilation for {semantic_call}")
                 system_prompt_template = cache_item.system_prompt_template
