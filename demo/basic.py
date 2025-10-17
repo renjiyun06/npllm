@@ -1,5 +1,4 @@
-import npllm
+from jinja2 import Template, meta
 
-# in Chinese
-joke: str = tell_me_a_joke()
-print(joke)
+template = "{% raw %}{{variable}}{% endraw %}"
+print(Template(template).render())

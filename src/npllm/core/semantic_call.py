@@ -206,7 +206,7 @@ class SemanticCall:
     def get_annotated_declaration_node(self, var_name: str) -> Optional[ast.AnnAssign]:
         if var_name.startswith('self.'):
             # find annotated declaration node in the enclosing class
-            enclosing_class_def = self._get_enclosing_class_def()
+            enclosing_class_def = self.enclosing_class_def
             if not enclosing_class_def:
                 return None
             
@@ -332,9 +332,9 @@ class SemanticCall:
             call_context.extend(referenced_custom_type_source.splitlines())
             call_context.append("")
 
+        self.line_number_in_call_context = self.line_number + len(call_context) - first_line + 1
         call_context.extend(enclosing_source.splitlines())
         self.call_context = add_line_number(call_context)
-        self.line_number_in_call_context = self.line_number - first_line + 1
     
     def get_cls_defining_module(self, cls: Type) -> Optional[Union[ModuleType, Cell]]:
         if hasattr(cls, '__notebook_cell_id__'):

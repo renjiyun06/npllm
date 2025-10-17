@@ -5,6 +5,7 @@ from typing import List
 from prompt_toolkit import PromptSession
 
 from npllm.core.ai import AI
+from npllm.core.execute_engines.default.default_execution_engine import DefaultExecutionEngine
 
 import logging
 
@@ -24,7 +25,7 @@ class ChatMessage:
 
 class ChatBot(AI):
     def __init__(self):
-        AI.__init__(self)
+        AI.__init__(self, semantic_execute_engine=DefaultExecutionEngine())
         self._prompt_session = PromptSession()
         self._history: List[ChatMessage] = []
 

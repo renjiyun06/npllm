@@ -1614,6 +1614,7 @@ version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "ipynbname" },
+    { name = "jinja2" },
     { name = "json-repair" },
     { name = "jupyterlab" },
     { name = "langsmith" },
@@ -1632,6 +1633,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ipynbname", specifier = ">=2025.8.0.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "json-repair", specifier = ">=0.51.0" },
     { name = "jupyterlab", specifier = ">=4.4.9" },
     { name = "langsmith", specifier = ">=0.4.34" },
