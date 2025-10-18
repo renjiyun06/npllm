@@ -45,9 +45,9 @@ class Compiler(AI):
         1. 该编译器必须知道关于 Semantic Python 的一切
         2. 该编译器在它为语义调用生成的提示词模版中必然需要引用语义调用的参数, 引用规范如下:
            - 使用 Template-A 模版语言来引用参数
-           - 引用位置参数: @arg0, @arg1
-           - 引用关键字参数, 直接使用参数名引用, 如 @user
-           - 引用参数字段, 使用 dot notation 引用, 如 @arg0.name, @user.address.city
+           - 引用位置参数: <%= arg0 %>, <%= arg1 %>
+           - 引用关键字参数, 直接使用参数名引用, 如 <%= user %>
+           - 引用参数字段, 使用 dot notation 引用, 如 <%= arg0.name %>, <%= user.address.city %>
         3. 该编译器同样需要支持 `@compile` 这个编译器指令
         
         对你当前工作的指导:

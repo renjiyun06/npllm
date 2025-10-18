@@ -144,6 +144,13 @@ class MetaTemplate:
             if is_loop_start_alone and loop_body.startswith('\n'):
                 loop_body = loop_body[1:]
             
+            if is_loop_end_alone:
+                last_newline_pos = loop_body.rfind('\n')
+                if last_newline_pos != -1:
+                    trailing = loop_body[last_newline_pos + 1:]
+                    if trailing.strip() == '':
+                        loop_body = loop_body[:last_newline_pos + 1]
+            
             collection = self._get_value(collection_path, context)
             if not collection or not hasattr(collection, '__iter__'):
                 replacement = ''
@@ -257,25 +264,3 @@ def tempate_b_placeholder_handler(template: str, args: List[Any], kwargs: Dict[s
     template_b = MetaTemplate(TemplateSyntaxPresets.b_style())
     context = _build_context(args, kwargs)
     return template_b.render(template, context)
-
-if __name__ == "__main__":
-    template = """
-<% users.each do |user| %>
-- <%= user.name %> (<%= user.age %>)
-    <% user.tags.each do |tag| %>
-    #<%= tag %>
-    <% end %>
-<% end %>
-""".strip()
-
-    context = {
-        "name": "John",
-        "users": [
-            {
-                "name": "John",
-                "age": 30,
-                "tags": ["tag1", "tag2"]
-            }
-        ]
-    }
-    print(tempate_b_placeholder_handler(template, [], context))
