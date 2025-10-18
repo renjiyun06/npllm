@@ -48,20 +48,21 @@ class Compiler(AI):
            - 引用位置参数: <%= arg0 %>, <%= arg1 %>
            - 引用关键字参数, 直接使用参数名引用, 如 <%= user %>
            - 引用参数字段, 使用 dot notation 引用, 如 <%= arg0.name %>, <%= user.address.city %>
-        3. 该编译器同样需要支持 `@compile` 这个编译器指令
+        3. 该编译器同样需要支持 `@compile` 这个编译器指令, 包括两种格式: 单行和多行
         
         对你当前工作的指导:
         1. 首先你必须深刻理解你当前是一个元编译器
-        2. 你当前需要处理的语义调用是: generate_system_prompt_and_user_prompt, 此处需要注意以下几点:
+        2. 你当前需要处理的语义调用是: generate_system_prompt_and_user_prompt. 此处需要注意以下几点:
+           - 编译该语义调用的是你, 不是该编译器. 这是你作为一个元编译器必须明白的要点.
            - 该语义调用的返回值类型是 `Tuple[str, str]`, 它所对应 JSON Schema 已在给你的 compile_task 中指定
            - 该编译器的输出必须严格匹配该类型, **注意与你自己的输出进行区分, 切勿混淆, 你当前是一个元编译器**
         3. 由于你同样也需要在你生成的提示词模版中引用参数, 也就是 compile_task, 这里我规定你的引用形式如下:
            - 使用 Template-A 模版语言来引用参数
            - 始终使用 <<arg0>> 来引用 compile_task, 因为它是一个位置参数
            - 可以采用 Template-B 的相关语法来展开一些字段值
-        4. 你必须教会该编译器如何正确地使用 Template-A 来进行参数引用, 告知其语法并配上相关示例.
+        4. **你必须教会该编译器如何正确地使用 Template-B 来进行参数引用, 告知其语法并配上相关示例**
         5. Template-A 和 Template-B 这两种模版语言只支持变量替换和循环展开, 切勿使用其他你自己设想的语法, 同时你也必须将这点告知该编译器
-        6. 输出提示词时, 配合模版语言, 尽可能做到最后的输出是美观的, 具备完美的可读性
+        6. 输出提示词时, 配合模版语言, 尽可能做到最后的输出是美观的, 具备完美的可读性, 同时你也需要将这点告知该编译器
         
         Template-A:
         使用 `<<variable>>` 输出变量, `<:loop collection as item:>...<:/loop:>` 进行循环, 示例:
@@ -107,7 +108,7 @@ class CacheItem:
 class DefaultExecutionEngine(SemanticExecuteEngine):
     def __init__(
         self, 
-        compile_model: str="openrouter/google/gemini-2.5-flash", 
+        compile_model: str="openrouter/google/gemini-2.5-pro", 
         execution_model: str="openrouter/google/gemini-2.5-flash"
     ):
         self._compiler = Compiler(execution_model=compile_model)

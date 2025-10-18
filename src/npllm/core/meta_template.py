@@ -161,7 +161,11 @@ class MetaTemplate:
                     loop_context[item_name] = item
                     rendered = self._render_content(loop_body, loop_context)
                     results.append(rendered)
-                replacement = ''.join(results)
+                
+                if loop_body.endswith('\n'):
+                    replacement = ''.join(results)
+                else:
+                    replacement = '\n'.join(results)
             
             if is_loop_start_alone and is_loop_end_alone:
                 replace_start = line_start
@@ -181,7 +185,25 @@ class MetaTemplate:
         def replace_var(match):
             path = match.group(1).strip()
             value = self._get_value(path, context)
-            return str(value) if value is not None else ''
+            if value is None:
+                return ''
+            
+            value_str = str(value)
+            
+            match_start = match.start()
+            line_start = content.rfind('\n', 0, match_start) + 1
+            line_prefix = content[line_start:match_start]
+            indent = len(line_prefix) - len(line_prefix.lstrip())
+            
+            if '\n' in value_str:
+                lines = value_str.split('\n')
+                indented_lines = [lines[0]]
+                indent_str = ' ' * indent
+                for line in lines[1:]:
+                    indented_lines.append(indent_str + line)
+                return '\n'.join(indented_lines)
+            
+            return value_str
         
         return re.sub(self.var_pattern, replace_var, content)
     
@@ -264,10 +286,3 @@ def tempate_b_placeholder_handler(template: str, args: List[Any], kwargs: Dict[s
     template_b = MetaTemplate(TemplateSyntaxPresets.b_style())
     context = _build_context(args, kwargs)
     return template_b.render(template, context)
-
-
-if __name__ == "__main__":
-    template = "**Positional parameters**: Use `arg` followed by the index, e.g., `<%= arg0 %>`"
-    args = [123]
-    kwargs = {}
-    print(tempate_a_placeholder_handler(template, args, kwargs))

@@ -57,11 +57,11 @@ class Program:
     statements: List[Union[Assignment, IfStatement, WhileStatement]]
 
 from npllm.core.ai import AI
-
+from npllm.core.execute_engines.default.default_execution_engine import DefaultExecutionEngine
 
 class LLMCompiler(AI):
     def __init__(self):
-        AI.__init__(self)
+        AI.__init__(self, semantic_execute_engine=DefaultExecutionEngine())
 
     async def compile(self, program: str) -> Program:
         return await self.reason_and_generate(program=program)

@@ -7,13 +7,13 @@ from typing import Set
 from IPython import get_ipython
 
 from npllm.core.ai import AI
-from npllm.core.execute_engines.default.default_execution_engine import DefaultExecutionEngine
+from npllm.core.execute_engines.agent.agent_execution_engine import AgentExecutionEngine
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-_ai = AI(semantic_execute_engine=DefaultExecutionEngine())
+_ai = AI(semantic_execute_engine=AgentExecutionEngine())
 _enabled = False
 
 _excluded: Set[str] = {

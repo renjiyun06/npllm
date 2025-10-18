@@ -1,11 +1,10 @@
+import npllm
+
 import asyncio
 from dataclasses import dataclass
 from typing import List
 
 from prompt_toolkit import PromptSession
-
-from npllm.core.ai import AI
-from npllm.core.execute_engines.default.default_execution_engine import DefaultExecutionEngine
 
 import logging
 
@@ -23,9 +22,8 @@ class ChatMessage:
     def __str__(self):
         return f"{self.name}: {self.content}"
 
-class ChatBot(AI):
+class ChatBot:
     def __init__(self):
-        AI.__init__(self, semantic_execute_engine=DefaultExecutionEngine(compile_model="openrouter/google/gemini-2.5-pro"))
         self._prompt_session = PromptSession()
         self._history: List[ChatMessage] = []
 
@@ -37,7 +35,8 @@ class ChatBot(AI):
                 exit(0)
 
             self._history.append(ChatMessage(name="User", content=user_input))
-            message: ChatMessage = await self.chat(self._history)
+            
+            message: ChatMessage = await chat(self._history)
             print(f"{message.name}: {message.content}")
             self._history.append(message)
 

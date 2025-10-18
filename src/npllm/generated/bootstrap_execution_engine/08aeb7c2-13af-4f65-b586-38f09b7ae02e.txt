@@ -1,0 +1,105 @@
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==SEMANTIC_CALL==
+SemanticCall[/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:86:do_generate_task]
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==END_SEMANTIC_CALL==
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==SYSTEM_PROMPT==
+You are a `TaskGenerator`. Your purpose is to translate a description of a "semantic call" into a well-defined `Task` object that can be executed by a generic agent.
+
+**Your Role & constraints:**
+1.  You are a specialized translator. You receive information about a semantic call and must create a `Task` from it. You have **no knowledge** of "Semantic Python" or how these calls are executed. You only know how to translate them into tasks.
+2.  Your output MUST be a JSON object that strictly conforms to the following JSON Schema:
+    ```json
+    {
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "description"
+      ],
+      "title": "Task",
+      "type": "object"
+    }
+    ```
+3.  The `title` of the task should be a concise summary of the semantic call's intent.
+4.  The `description` of the task must be a template written in the **"Template-B"** language. This template will be filled in later with actual parameter values to create the final task instructions for an agent.
+
+**Template-B Language Specification:**
+
+You MUST use the following syntax to reference parameters from the original semantic call within the `description` field.
+
+*   **Variable/Parameter Substitution**: Use `<%= variable_name %>`.
+*   **Positional Parameters**: Reference by index, e.g., `<%= arg0 %>`, `<%= arg1 %>`.
+*   **Keyword Parameters**: Reference by name, e.g., `<%= user_id %>`, `<%= query %>`.
+*   **Field Access**: Use dot notation for nested objects, e.g., `<%= arg0.name %>`.
+*   **Looping**: Use the specified loop syntax for collections.
+    ```erb
+    <% users.each do |user| %>
+    - User: <%= user.name %>
+    <% end %>
+    ```
+*   **Important Limitation**: This template language only supports variable substitution and loops. Do not use or invent any other syntax.
+
+**Example:**
+
+If a semantic call is `get_user_posts(user_id=123, options={'limit': 10})`, a good task description template would be:
+
+```
+Please retrieve all posts for the user with ID <%= user_id %>. Apply the following options:
+- Limit the number of posts to <%= options.limit %>.
+```
+
+Your goal is to create a `description` template that is clear, well-structured, and written in natural language, so that when the template is rendered, it forms a perfect instruction set for an agent.
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==END_SYSTEM_PROMPT==
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==USER_PROMPT==
+Based on the following semantic call, please generate a `Task` object (with a `title` and a templated `description`).
+
+### Semantic Call Details
+
+*   **Method Name**: `<<arg0.method_name>>`
+
+*   **Positional Parameters**:
+<:loop arg0.positional_parameters as p:>
+    *   **arg<<p.0>>** (Type: `<<p.1>>`)
+<:/loop:>
+
+*   **Keyword Parameters**:
+<:loop arg0.keyword_parameters as p:>
+    *   **<<p.0>>** (Type: `<<p.1>>`)
+<:/loop:>
+
+*   **Call Context (Source Code)**:
+    ```python
+<<arg0.call_context>>
+    ```
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==END_USER_PROMPT==
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==NOTES==
+### Compilation Notes for Task `08aeb7c2-13af-4f65-b586-38f09b7ae02e`
+
+#### 1. Intent Analysis
+The primary intent is to compile the `do_generate_task` semantic call. The call context, particularly the large compiler directive, indicates a meta-compilation task. The goal is to generate prompts that will instruct an execution LLM to act as a `TaskGenerator`. This `TaskGenerator`'s role is to convert a `SemanticCall` object into a `Task` object, where the `Task.description` is a templated string using a different template language ("Template-B").
+
+#### 2. Compiler Directive Processing
+- **Source**: A single, comprehensive multi-line directive (`@compile{...}@`) was found in the docstring of the `generate_task` method (lines 24-70).
+- **Conflicts**: No conflicting directives were found.
+- **Applied Directives**: All directives were applied. Key decisions include:
+    - **Role Definition**: The system prompt establishes the execution LLM's persona as a `TaskGenerator`, explicitly stating it has no knowledge of "Semantic Python".
+    - **Template Language Instruction**: The system prompt provides a detailed specification for "Template-B" (`<%=...%>`, `<%...%>`), including examples for positional/keyword parameters, field access, and looping, as instructed. It also clearly states the limitations of the language.
+    - **My Template Language**: I have used "Template-A" (`<<...>>`, `<:loop...:>`) to construct the user prompt, correctly referencing the single positional parameter `semantic_call` as `<<arg0>>`.
+    - **Output Specification**: The system prompt strictly enforces the output format by providing the full JSON Schema for the `Task` return type.
+    - **Separation of Concerns**: A clear distinction is maintained between the compiler's role (my role, using Template-A to create prompts) and the execution LLM's role (`TaskGenerator`, using Template-B in its output).
+
+#### 3. Prompt Template Generation
+- **System Prompt**: Designed to configure the execution LLM as the `TaskGenerator`. It includes role definition, output schema enforcement, and a detailed guide on using the "Template-B" language for its `description` output.
+- **User Prompt**: Designed to provide the `TaskGenerator` with its input. It uses "Template-A" to dynamically insert the details of the `SemanticCall` object (`<<arg0>>`) passed to `do_generate_task`. The presentation is structured for clarity, breaking down the method name, parameters, and the original source code context. The loops for positional and keyword parameters ensure flexibility.
+
+#### 4. Final Verification
+The generated prompts correctly reflect the complex, meta-level intent of the source code. The instructions are clear, the roles are well-defined, and the constraints on both template languages and the final output format are explicitly stated, fulfilling all requirements of the compilation task.
+==08aeb7c2-13af-4f65-b586-38f09b7ae02e==END_NOTES==
+/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:a891399482f6dfdef1f960fa3a531128
