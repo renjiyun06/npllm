@@ -1,13 +1,8 @@
 import builtins
-import sys
-import os
 import ast
 import builtins
 import inspect
 from typing import Set
-from importlib.abc import MetaPathFinder, SourceLoader
-from importlib.util import spec_from_file_location
-from importlib.machinery import ModuleSpec
 
 from IPython import get_ipython
 
@@ -95,95 +90,8 @@ class AIBase(AI):
     def __init__(self):
         AI.__init__(self, semantic_execute_engine=AgentExecutionEngine())
 
-class ClassBaseInjector(ast.NodeTransformer):
-    def __init__(self):
-        self.has_classes = False
-    
-    def visit_ClassDef(self, node):
-        self.has_classes = True
-        
-        if not node.bases:
-            node.bases.append(ast.Name(id='_AIBase', ctx=ast.Load()))
-        
-        self.generic_visit(node)
-        return node
-
-class AISourceLoader(SourceLoader):
-    def __init__(self, fullname, path):
-        self.fullname = fullname
-        self.path = path
-    
-    def get_filename(self, fullname):
-        return self.path
-    
-    def get_data(self, path):
-        with open(path, 'rb') as f:
-            return f.read()
-    
-    def source_to_code(self, data, path, *, _optimize=-1):
-        try:
-            source = data.decode('utf-8')
-            tree = ast.parse(source, path)
-            
-            transformer = ClassBaseInjector()
-            tree = transformer.visit(tree)
-            
-            if transformer.has_classes:
-                import_node = ast.ImportFrom(
-                    module='npllm',
-                    names=[ast.alias(name='AIBase', asname='_AIBase')],
-                    level=0
-                )
-                tree.body.insert(0, import_node)
-            
-            ast.fix_missing_locations(tree)
-            
-            return compile(tree, path, 'exec', dont_inherit=True, optimize=_optimize)
-        except SyntaxError:
-            return compile(data, path, 'exec', dont_inherit=True, optimize=_optimize)
-
-class AIMetaPathFinder(MetaPathFinder):
-    def find_spec(self, fullname, path, target=None):
-        if fullname.startswith('npllm'):
-            return None
-        
-        if self._is_stdlib_module(fullname):
-            return None
-        
-        if path is None:
-            path = sys.path
-        
-        for search_path in path:
-            if 'site-packages' in search_path or 'dist-packages' in search_path:
-                continue
-            
-            module_path = os.path.join(search_path, fullname.replace('.', os.sep) + '.py')
-            if os.path.isfile(module_path):
-                loader = AISourceLoader(fullname, module_path)
-                return spec_from_file_location(
-                    fullname, 
-                    module_path, 
-                    loader=loader,
-                    submodule_search_locations=None
-                )
-        return None
-    
-    def _is_stdlib_module(self, fullname):
-        stdlib_modules = {
-            'abc', 'ast', 'asyncio', 'builtins', 'collections', 'copy',
-            'datetime', 'email', 'encodings', 'functools', 'importlib',
-            'inspect', 'io', 'itertools', 'json', 'logging', 'os',
-            'pathlib', 're', 'sys', 'time', 'types', 'typing', 'warnings',
-            'weakref', 'xml', 'unittest', 'http', 'urllib', 'socket',
-            'threading', 'multiprocessing', 'queue', 'contextlib'
-        }
-        
-        top_level = fullname.split('.')[0]
-        return top_level in stdlib_modules
-
 def _enable_ai_base_inject():
-    finder = AIMetaPathFinder()
-    sys.meta_path.insert(0, finder)
+    pass
 
 def _enable_python_ai():
     global _enabled
