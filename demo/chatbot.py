@@ -37,7 +37,6 @@ class ChatBot(AI):
                 exit(0)
 
             self._history.append(ChatMessage(name="User", content=user_input))
-            # the chat bot's name is Tomato
             message: ChatMessage = await self.chat(self._history)
             print(f"{message.name}: {message.content}")
             self._history.append(message)

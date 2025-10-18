@@ -264,3 +264,10 @@ def tempate_b_placeholder_handler(template: str, args: List[Any], kwargs: Dict[s
     template_b = MetaTemplate(TemplateSyntaxPresets.b_style())
     context = _build_context(args, kwargs)
     return template_b.render(template, context)
+
+
+if __name__ == "__main__":
+    template = "**Positional parameters**: Use `arg` followed by the index, e.g., `<%= arg0 %>`"
+    args = [123]
+    kwargs = {}
+    print(tempate_a_placeholder_handler(template, args, kwargs))
