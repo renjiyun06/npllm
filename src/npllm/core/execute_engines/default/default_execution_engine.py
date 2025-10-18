@@ -10,7 +10,7 @@ from npllm.core.semantic_execute_engine import SemanticExecuteEngine
 from npllm.core.semantic_call import SemanticCall
 from npllm.core.execute_engines.bootstrap.bootstrap_execution_engine import BootstrapExecutionEngine
 from npllm.utils.json_util import parse_json_str
-from npllm.utils.template_placeholder_util import template_a_placeholder_handler, template_b_placeholder_handler
+from npllm.core.meta_template import tempate_a_placeholder_handler, tempate_b_placeholder_handler
 
 from npllm.utils.module_util import module_hash
 
@@ -33,51 +33,55 @@ class Compiler(AI):
         AI.__init__(self, semantic_execute_engine=BootstrapExecutionEngine(
             compile_model="openrouter/google/gemini-2.5-pro",
             execution_model=execution_model,
-            template_placeholder_handler=template_b_placeholder_handler
+            template_placeholder_handler=tempate_b_placeholder_handler
         ))
 
     async def compile(self, compile_task: CompileTask) -> Tuple[str, str]:
-        # @compile{
-        # 该编译器的角色跟你的一致, 因此在当前流程中, 你相当于一个元编译器.
-        # 
-        # 对该编译器的具体规定:
-        # 1. 该编译器必须知道关于 Semantic Python 的一切
-        # 2. 该编译器在它为语义调用生成的提示词模版中必然需要引用语义调用的参数, 引用规范如下:
-        #    - 使用 Template-A 模版语言来引用参数
-        #    - 引用位置参数: @arg0, @arg1
-        #    - 引用关键字参数, 直接使用参数名引用, 如 @user
-        #    - 引用参数字段, 使用 dot notation 引用, 如 @arg0.name, @user.address.city
-        # 3. 该编译器同样需要支持 `@compile` 这个编译器指令
-        # 
-        # 对你当前工作的指导:
-        # 1. 首先你必须深刻理解你当前是一个元编译器
-        # 2. 你当前需要处理的语义调用是: generate_system_prompt_and_user_prompt
-        # 3. 该语义调用的返回值类型是: Tuple[str, str]
-        # 4. 该编译器的返回值必须严格满足该类型, 即按照 <compile_task>.<return_specification>.<json_schema>, 注意, 此处是指你的 compile task
-        # 5. 由于你同样也需要在你生成的提示词模版中引用参数, 也就是 compile_task, 这里我规定你的引用形式如下:
-        #    - 使用 Template-B 模版语言来引用参数
-        #    - 始终使用 <<arg0>> 来引用 compile_task, 因为它是一个位置参数
-        #    - 可以采用 Template-B 的相关语法来展开一些字段值
-        # 6. 你必须教会该编译器如何正确地使用 Template-A 来进行参数引用, 告知其语法并配上相关示例.
-        # 
-        # Template-A:
-        # 使用 `@` 标记变量, `@each item <- collection:`进行循环, 缩进控制作用域. 示例:
-        # Hello @name!
-        # @each user <- users:
-        # - @user.name (@user.age)
-        #   @each tag <- user.tags:
-        #   #@tag
-        # 
-        # Template-B:
-        # 使用 `<<variable>>` 标记变量, `<:loop collection as item:>...<:/loop:>`进行循环, 示例:
-        # Hello <<name>>!
-        # <:loop users as user:>
-        #   - <<user.name>> (<<user.age>>)
-        #   <:loop user.tags as tag:>
-        #     #<<tag>>
-        #   <:/loop:>
-        # <:/loop:>
-        # }@
+        """
+        @compile{
+        该编译器的角色跟你的一致, 因此在当前流程中, 你相当于一个元编译器.
+        
+        对该编译器的具体规定:
+        1. 该编译器必须知道关于 Semantic Python 的一切
+        2. 该编译器在它为语义调用生成的提示词模版中必然需要引用语义调用的参数, 引用规范如下:
+           - 使用 Template-A 模版语言来引用参数
+           - 引用位置参数: @arg0, @arg1
+           - 引用关键字参数, 直接使用参数名引用, 如 @user
+           - 引用参数字段, 使用 dot notation 引用, 如 @arg0.name, @user.address.city
+        3. 该编译器同样需要支持 `@compile` 这个编译器指令
+        
+        对你当前工作的指导:
+        1. 首先你必须深刻理解你当前是一个元编译器
+        2. 你当前需要处理的语义调用是: generate_system_prompt_and_user_prompt
+        3. 该语义调用的返回值类型是: Tuple[str, str]
+        4. 该编译器的返回值必须严格满足该类型, 即按照 <compile_task>.<return_specification>.<json_schema>, 注意, 此处是指你的 compile task
+        5. 由于你同样也需要在你生成的提示词模版中引用参数, 也就是 compile_task, 这里我规定你的引用形式如下:
+           - 使用 Template-B 模版语言来引用参数
+           - 始终使用 <<arg0>> 来引用 compile_task, 因为它是一个位置参数
+           - 可以采用 Template-B 的相关语法来展开一些字段值
+        6. 你必须教会该编译器如何正确地使用 Template-A 来进行参数引用, 告知其语法并配上相关示例.
+        
+        Template-A:
+        使用 `<%= variable %>` 输出变量, `<% .each do |...| %>...<% end %>` 进行循环. 示例:
+        Hello <%= name %>!
+        <% users.each do |user| %>
+        - <%= user.name %> (<%= user.age %>)
+            <% user.tags.each do |tag| %>
+            #<%= tag %>
+            <% end %>
+        <% end %>
+        
+        Template-B:
+        使用 `<<variable>>` 输出变量, `<:loop collection as item:>...<:/loop:>` 进行循环, 示例:
+        Hello <<name>>!
+        <:loop users as user:>
+        - <<user.name>> (<<user.age>>)
+            <:loop user.tags as tag:>
+            #<<tag>>
+            <:/loop:>
+        <:/loop:>
+        }@
+        """
         return await self.generate_system_prompt_and_user_prompt(compile_task)
 
 @dataclass
@@ -106,7 +110,7 @@ class DefaultExecutionEngine(SemanticExecuteEngine):
     ):
         self._compiler = Compiler(execution_model=compile_model)
         self._execution_model = execution_model
-        self._template_placeholder_handler = template_a_placeholder_handler
+        self._template_placeholder_handler = tempate_a_placeholder_handler
         
         self._compilation_cache: Dict[str, CacheItem] = {}
         self._load_compilation_cache()
