@@ -1,6 +1,6 @@
 import builtins
+import sys
 import ast
-import builtins
 import inspect
 from typing import Set
 
@@ -90,8 +90,108 @@ class AIBase(AI):
     def __init__(self):
         AI.__init__(self, semantic_execute_engine=AgentExecutionEngine())
 
+_ai_base_target_modules: Set[str] = set()
+_ai_base_original_build_class = None
+
+def _find_target_module_name_and_globals():
+    frame = inspect.currentframe()
+    if frame:
+        frame = frame.f_back
+
+    candidates = []
+    while frame:
+        try:
+            name = frame.f_globals.get('__name__')
+        except Exception:
+            name = None
+        filename = frame.f_code.co_filename
+
+        if __file__ in filename:
+            frame = frame.f_back
+            continue
+        if name and not name.startswith('importlib') and not name.startswith('npllm'):
+            candidates.append(frame)
+        frame = frame.f_back
+
+    target_frame = None
+    if candidates:
+        target_frame = next((f for f in candidates if f.f_globals.get('__name__') == '__main__'), candidates[0])
+
+    if target_frame:
+        mod_globals = target_frame.f_globals
+        mod_name = mod_globals.get('__name__')
+        if mod_name:
+            return mod_name, mod_globals
+
+    if '__main__' in sys.modules:
+        try:
+            return '__main__', sys.modules['__main__'].__dict__
+        except Exception:
+            return '__main__', None
+
+    return None, None
+
+def _ensure_ai_initialized_on_class(cls_obj):
+    orig_init = getattr(cls_obj, '__init__', None)
+
+    def wrapped_init(self, *a, **kw):
+        if orig_init is not None:
+            orig_init(self, *a, **kw)
+        
+        AIBase.__init__(self)
+
+    try:
+        wrapped_init.__name__ = getattr(orig_init, '__name__', '__init__')
+        wrapped_init.__qualname__ = getattr(orig_init, '__qualname__', wrapped_init.__qualname__)
+    except Exception:
+        pass
+    setattr(cls_obj, '__init__', wrapped_init)
+
 def _enable_ai_base_inject():
-    pass
+    global _ai_base_target_modules, _ai_base_original_build_class
+
+    mod_name, _ = _find_target_module_name_and_globals()
+    if mod_name:
+        _ai_base_target_modules.add(mod_name)
+
+    _ai_base_original_build_class = builtins.__build_class__
+
+    def _patched_build_class(func, name, *bases, **kwargs):
+        cls = _ai_base_original_build_class(func, name, *bases, **kwargs)
+
+        try:
+            defining_mod = func.__globals__.get('__name__')
+        except Exception:
+            defining_mod = None
+
+        if defining_mod in _ai_base_target_modules and defining_mod != __name__:
+            if AIBase not in cls.__mro__:
+                try:
+                    new_bases = (AIBase,) + tuple(b for b in cls.__bases__ if b is not AIBase)
+                    cls.__bases__ = new_bases
+                    _ensure_ai_initialized_on_class(cls)
+                except TypeError as e:
+                    try:
+                        namespace = {}
+                        for k, v in cls.__dict__.items():
+                            if k in ('__dict__', '__weakref__', '__slots__'):
+                                continue
+                            namespace[k] = v
+                        namespace.setdefault('__module__', defining_mod)
+                        namespace.setdefault('__qualname__', name)
+                        new_bases = (AIBase,) + tuple(b for b in cls.__bases__ if b is not AIBase)
+                        new_cls = type(name, new_bases, namespace)
+                        _ensure_ai_initialized_on_class(new_cls)
+                        try:
+                            func.__globals__[name] = new_cls
+                        except Exception:
+                            pass
+                        cls = new_cls
+                    except Exception as e2:
+                        pass
+        return cls
+
+    builtins.__build_class__ = _patched_build_class
 
 def _enable_python_ai():
     global _enabled
