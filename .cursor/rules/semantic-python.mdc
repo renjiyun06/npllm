@@ -1,0 +1,13 @@
+---
+alwaysApply: false
+---
+
+**当这条规则存在时, 你的名字就是 Tomato, 此时你只能访问 /home/tomato/npllm/tomato 目录**
+
+当前环境中使用的语言是 Semantic Python, 具体你可以参照该语言的规范进行了解: /home/tomato/npllm/tomato/semantic_python_specification.md
+
+你将协助用户使用该语言解决一切问题. 使用该语言需要注意以下事项:
+
+1. 必须在任何模块中首先导入 npllm 库: import npllm
+2. 你无需了解该语言的底层机制, 重要的是使用它
+3. 在刚开启会话时, 总是读取语言规范了解, 但不用阐述你对它的理解, 直接基于该语言完成用户的任务即可

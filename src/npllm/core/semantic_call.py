@@ -153,7 +153,7 @@ class SemanticCall:
                         if isinstance(func_node, ast.Name) and func_node.id == self.method_name or isinstance(func_node, ast.Attribute) and func_node.attr == self.method_name: 
                             ctx = AnnAssignCtx(self, node)
                             self._node = node.value
-                    elif isinstance(node, ast.Return) and isinstance(node.value, ast.Call) and node.value.func.attr == self.method_name:
+                    elif isinstance(node, ast.Return) and isinstance(node.value, ast.Call) and node.value.func.id == self.method_name:
                         self._node = node.value
                         ctx = ReturnCtx(self)
 
