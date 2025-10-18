@@ -1,6 +1,7 @@
 import builtins
 import sys
 import ast
+import dataclasses
 import inspect
 from typing import Set
 
@@ -22,6 +23,8 @@ _excluded: Set[str] = {
     'str', 'int', 'float', 'bool', 'list', 'dict', 'tuple', 'set',
     'type', 'object', 'Exception', 'print', 'len', 'range'
 }
+
+_ai_base_excluded_classes_by_module = {}
 
 def _enable_module_ai():
     global _ai, _excluded
@@ -70,6 +73,7 @@ def _enable_module_ai():
                     add_target_names(item.optional_vars)
 
     to_inject: Set[str] = set()
+    excluded_class_names: Set[str] = set()
     for n in ast.walk(tree):
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Name):
             name = n.func.id
@@ -81,10 +85,39 @@ def _enable_module_ai():
                 continue
             to_inject.add(name)
 
+        if isinstance(n, ast.ClassDef):
+            is_dataclass_decorated = False
+            for deco in n.decorator_list:
+                target = deco.func if isinstance(deco, ast.Call) else deco
+                if isinstance(target, ast.Name) and target.id == 'dataclass':
+                    is_dataclass_decorated = True
+                    break
+                if isinstance(target, ast.Attribute) and target.attr == 'dataclass':
+                    is_dataclass_decorated = True
+                    break
+            if is_dataclass_decorated:
+                excluded_class_names.add(n.name)
+                continue
+
+            is_pydantic_like = False
+            for b in n.bases:
+                if isinstance(b, ast.Name) and b.id == 'BaseModel':
+                    is_pydantic_like = True
+                    break
+                if isinstance(b, ast.Attribute) and b.attr == 'BaseModel':
+                    is_pydantic_like = True
+                    break
+            if is_pydantic_like:
+                excluded_class_names.add(n.name)
+
     logger.info(f"Injecting {to_inject} into {mod_globals}")
 
     for name in to_inject:
         mod_globals.setdefault(name, getattr(_ai, name))
+
+    mod_name = mod_globals.get('__name__')
+    if mod_name:
+        _ai_base_excluded_classes_by_module.setdefault(mod_name, set()).update(excluded_class_names)
 
 class AIBase(AI):
     def __init__(self):
@@ -147,6 +180,15 @@ def _ensure_ai_initialized_on_class(cls_obj):
         pass
     setattr(cls_obj, '__init__', wrapped_init)
 
+def _is_pydantic_base_class(t):
+    try:
+        for m in getattr(t, '__mro__', ()):
+            if getattr(m, '__name__', '') == 'BaseModel' and 'pydantic' in getattr(m, '__module__', ''):
+                return True
+    except Exception:
+        pass
+    return False
+
 def _enable_ai_base_inject():
     global _ai_base_target_modules, _ai_base_original_build_class
 
@@ -165,6 +207,25 @@ def _enable_ai_base_inject():
             defining_mod = None
 
         if defining_mod in _ai_base_target_modules and defining_mod != __name__:
+            try:
+                if dataclasses.is_dataclass(cls):
+                    return cls
+            except Exception:
+                pass
+
+            try:
+                if any(_is_pydantic_base_class(b) for b in cls.__bases__):
+                    return cls
+            except Exception:
+                pass
+
+            try:
+                excluded = _ai_base_excluded_classes_by_module.get(defining_mod)
+                if excluded and name in excluded:
+                    return cls
+            except Exception:
+                pass
+
             if AIBase not in cls.__mro__:
                 try:
                     new_bases = (AIBase,) + tuple(b for b in cls.__bases__ if b is not AIBase)
