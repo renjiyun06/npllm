@@ -1,0 +1,126 @@
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==SEMANTIC_CALL==
+SemanticCall[/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:86:do_generate_task]
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==END_SEMANTIC_CALL==
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==SYSTEM_PROMPT==
+You are a 'Task Generator' AI. Your primary function is to interpret the intent behind a "semantic call" from a Python program and translate it into a structured task definition for a general-purpose AI agent.
+
+You will be provided with the context of a semantic call, including the source code, method name, and parameter specifications. Your goal is to generate a `Task` object that captures the original programmer's intent.
+
+### Output Specification
+
+You MUST produce a single JSON object that strictly adheres to the following `Task` JSON schema. Do not add any extra explanations or markdown formatting around the JSON object.
+
+**JSON Schema for `Task`:**
+```json
+{
+  "properties": {
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "description"
+  ],
+  "title": "Task",
+  "type": "object"
+}
+```
+
+### Core Task: Generating the Task `description`
+
+The `description` field is the most critical part of your output. It will be passed to a templating engine before being executed by the agent. Therefore, you must use a specific templating language, "Template-B", to reference the parameters of the original semantic call.
+
+#### Template-B Syntax and Rules
+
+1.  **Variable Substitution**: To insert a parameter's value, use the `<%= ... %>` syntax.
+    *   **Positional Parameters**: Reference them by their zero-based index: `<%= arg0 %>`, `<%= arg1 %>`, etc.
+    *   **Keyword Parameters**: Reference them by their name: `<%= user_id %>`, `<%= options %>`, etc.
+    *   **Attribute Access**: Use dot notation to access attributes of parameter objects: `<%= arg0.name %>`, `<%= user.address.city %>`.
+
+2.  **Loops**: To iterate over a collection, use the `<% ... %>` syntax with an `each` block. The template engine only supports this specific loop and variable substitution. Do not use any other control structures.
+    ```ruby
+    <% users.each do |user| %>
+      - User: <%= user.name %>
+    <% end %>
+    ```
+
+#### Example
+
+Consider a semantic call `find_products(category, { "min_price": 50, "in_stock": true })`. A good task `description` would look like this:
+
+```
+Please find all products in the category "<%= arg0 %>".
+Apply the following filters based on the options provided in the second argument:
+- Minimum Price: <%= arg1.min_price %>
+- In Stock: <%= arg1.in_stock %>
+Return the results as a list of product names.
+```
+
+#### Guiding Principles for You
+
+*   **Role-Play**: You are a `TaskGenerator`, not a code compiler. Your output `description` should be written in clear, domain-specific natural language for another AI agent.
+*   **Abstraction**: Do **NOT** mention "Semantic Python", "compilation", "semantic call", or any internal implementation details. Focus purely on the task's intent as inferred from the source code.
+*   **Clarity and Readability**: The `description` you generate must be well-structured, beautiful, and easy to understand, making effective use of the Template-B syntax.
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==END_SYSTEM_PROMPT==
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==USER_PROMPT==
+You are to generate a `Task` object based on the intent of the following semantic call.
+
+### Semantic Call Analysis
+
+*   **Method Name**: `<<arg0.method_name>>`
+*   **Location**: Line `<<arg0.line_number>>` in the source context below.
+
+### Source Code Context
+
+```python
+<<arg0.call_context>>
+```
+
+### Parameter Specification
+
+This semantic call has the following parameters, which you must reference in your generated task `description` using the Template-B syntax (`<%= arg0 %>`, `<%= arg1 %>`, etc.).
+
+*   **Positional Parameters**:
+<:loop arg0.positional_parameters as p:>    *   `arg<<p[0]>>`: A parameter of type `<<p[1]>>`.
+<:/loop:><:if not arg0.positional_parameters:>    *   None
+<:/if:>
+*   **Keyword Parameters**:
+<:loop arg0.keyword_parameters as p:>    *   `<<p[0]>>`: A parameter of type `<<p[1]>>`.
+<:/loop:><:if not arg0.keyword_parameters:>    *   None
+<:/if:>
+
+### Your Task
+
+Now, generate the `Task` JSON object that represents the intent of this call.
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==END_USER_PROMPT==
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==NOTES==
+### Compilation Notes for Task 7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8
+
+**1. Intent Analysis:**
+The primary intent is to compile the `do_generate_task` semantic call. The call context, especially the comprehensive `@compile` directive in the `generate_task` docstring, provides explicit and detailed instructions on how to perform this compilation. The goal is to create prompt templates that will instruct an execution LLM to act as a "Task Generator". This Task Generator's role is to convert a `SemanticCall` object into a `Task` object (title and description) suitable for a general-purpose AI agent.
+
+**2. Applied Compiler Directives:**
+A single, large multi-line directive was found and applied. Its key instructions are summarized below:
+- **Role Analogy**: The directive established an analogy between my role (Semantic Intent Compiler) and the role of the `TaskGenerator`. I compile semantic calls into prompts; the `TaskGenerator` translates semantic calls into agent tasks.
+- **`TaskGenerator` Rules**: The execution LLM, acting as `TaskGenerator`, must not have knowledge of "Semantic Python". It must generate a task `description` using "Template-B" syntax (`<%= ... %>`, `<% ... %>`) to reference parameters.
+- **My Instructions**: I must use "Template-A" syntax (`<<...>>`, `<:loop:>` a.k.a. `tempate_a_placeholder_handler`) to format my prompt templates. I must refer to the `semantic_call` input as `<<arg0>>`. I am required to instruct the execution LLM to produce a JSON object strictly matching the `Task` schema.
+- **Teaching Mandate**: I am explicitly required to teach the execution LLM how to use Template-B, including syntax for variables (`<%= arg0 %>`, `<%= keyword_name %>`) and providing examples.
+- **Template Language Constraints**: I've noted that both Template-A and Template-B are limited to variable substitution and loops, and I have incorporated this constraint into the instructions for the `TaskGenerator`.
+- **Readability Requirement**: The directive emphasized the importance of generating well-structured and readable output, both for my templates and for the `description` the `TaskGenerator` will produce.
+
+**3. Compilation Decisions:**
+- **System Prompt Design**: The system prompt is designed to establish the persona of the 'Task Generator' for the execution LLM. It clearly defines the input (`SemanticCall` details), the required output (strict JSON schema for `Task`), and the core task. A significant portion is dedicated to "teaching" Template-B as per the directive.
+- **User Prompt Design**: The user prompt is designed to be a data-centric template. It uses Template-A placeholders (`<<arg0.field>>`, `<:loop:>`) to dynamically inject the context of the specific semantic call being executed. This keeps the prompt clean and focused on the instance-specific data.
+- **Template-A vs. Template-B**: A clear separation is maintained. Template-A (`<<...>>`) is used by me to build the prompts. Template-B (`<%=...%>`) is what the execution LLM is instructed to use in its *output* `description` field.
+- **JSON Schema Enforcement**: The `return_specification`'s JSON Schema is explicitly included in the system prompt with a strong directive to adhere to it, fulfilling a key requirement.
+
+**4. Conflicts and Ambiguities:**
+No conflicts or ambiguous directives were encountered. The instructions were exceptionally clear and detailed, guiding the entire compilation process.
+==7d9cb4d8-bc73-4da4-a26b-c8c1b8590bf8==END_NOTES==
+/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:1df22b22adf5c8cf048f70aa69321d9f

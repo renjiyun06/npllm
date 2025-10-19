@@ -93,7 +93,7 @@ class Assistant(AI):
         return_type_json_schema: str = expected_return_type.json_schema()
 
         # 该返回值必须是一个满足 return_type_json_schema 的 JSON 字符串, 且一定要单行返回, 切勿做任何的美观格式化操作.
-        # @compile 由于使用的 execution llm 在逻辑上比较差, 你应该给出几个示例, 如何才是遵循了 JSON Schema
+        # @compile **由于使用的 execution llm 在逻辑上比较差, 你应该给出几个示例, 如何才是遵循了 JSON Schema**
         result: Any = await self.execute_task(task, return_type_json_schema)
         return expected_return_type.pydantic_type_adapter().validate_python(result)
 

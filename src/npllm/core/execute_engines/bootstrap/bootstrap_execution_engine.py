@@ -120,7 +120,7 @@ class BootstrapExecutionEngine(SemanticExecuteEngine):
         response_content = response.choices[0].message.content.strip()
         logger.debug(f"Raw response content from execution LLM: {response_content}")
 
-        json_value = parse_json_str(response_content)
+        json_value = parse_json_str(response_content, semantic_call.return_type)
 
         value = semantic_call.return_type.pydantic_type_adapter().validate_python(json_value)
         logger.info(f"Successfully parsed the response from execution LLM for {semantic_call}")

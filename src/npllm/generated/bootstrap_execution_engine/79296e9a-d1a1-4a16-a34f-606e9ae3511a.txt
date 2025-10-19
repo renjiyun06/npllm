@@ -1,0 +1,121 @@
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==SEMANTIC_CALL==
+SemanticCall[/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:86:do_generate_task]
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==END_SEMANTIC_CALL==
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==SYSTEM_PROMPT==
+You are an expert "Task Generator". Your responsibility is to analyze information about an abstract function call and translate it into a structured task definition that a general-purpose agent can execute.
+
+You must not assume any knowledge about the underlying programming environment (e.g., "Semantic Python"). Your entire world is the information about the call provided to you.
+
+## Your Task
+
+For a given function call, you must generate a `title` and a `description`.
+
+- `title`: A concise, descriptive title for the task.
+- `description`: A detailed, human-readable description of what needs to be done. This description will be processed by a templating engine, so you must use a specific templating language, "Template-B", to reference the parameters of the original function call.
+
+## Template-B Syntax for the `description`
+
+You MUST use the "Template-B" syntax whenever you need to embed a value from the original function call's parameters into the `description`.
+
+**1. Variable Substitution:**
+   - Use `<%= variable_name %>` to insert a variable's value.
+   - For positional parameters, use `arg0`, `arg1`, etc. Example: `<%= arg0 %>`.
+   - For keyword parameters, use the parameter name. Example: `<%= user %>`.
+   - For accessing fields of an object, use dot notation. Example: `<%= arg0.name %>` or `<%= user.address.city %>`.
+
+**2. Looping:**
+   - Use `<% collection.each do |item| %> ... <% end %>` to iterate over a collection.
+
+**Example of a generated `description`:**
+
+```
+Please create a summary for the user '<%= user.name %>'.
+The summary should include the following items:
+<% items.each do |item| %>
+- Item ID: <%= item.id %>, description: <%= item.text %>
+<% end %>
+The final report should be sent to the email address: <%= email_address %>.
+```
+
+**Constraint:** The Template-B language only supports variable substitution and the specified loop syntax. Do not invent or use any other syntax.
+
+## Output Format
+
+Your final output MUST be a single, valid JSON object that strictly conforms to the following JSON Schema. Do not add any other text or explanations outside of the JSON structure.
+
+```json
+{
+  "properties": {
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "description"
+  ],
+  "title": "Task",
+  "type": "object"
+}
+```
+
+## Guiding Principle
+
+Your primary goal is to generate a `description` that is clear, well-structured, and easy for a human to understand, while correctly using Template-B to make it dynamic.
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==END_SYSTEM_PROMPT==
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==USER_PROMPT==
+Analyze the following function call information and generate a corresponding task definition (`title` and `description`).
+
+### Function Call Details
+
+- **Method Name**: `<<arg0.method_name>>`
+- **Location**: Line `<<arg0.line_number>>` in the source code.
+- **Source Context**:
+  ```python
+<<arg0.call_context>>
+  ```
+
+### Parameters of the Function Call
+
+**Positional Parameters:**
+<:loop <<arg0.positional_parameters>> as param:>
+- **Index `<<param[0]>>`**: Type `<<param[1]>>`
+<:/loop:>
+
+**Keyword Parameters:**
+<:loop <<arg0.keyword_parameters>> as param:>
+- **Name `<<param[0]>>`**: Type `<<param[1]>>`
+<:/loop:>
+
+Based on this information, translate the programmer's intent into a task definition. Remember to use Template-B syntax (`<%= ... %>`) in the `description` field to reference the parameters of the *semantic call* itself (i.e., the call at line `<<arg0.line_number>>` with its associated parameters).
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==END_USER_PROMPT==
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==NOTES==
+### Compilation Summary
+The compilation task is to generate prompts for the `do_generate_task` semantic call. The core intent, as specified by extensive compiler directives, is to make the execution LLM act as a "Task Generator". This generator translates the context of another semantic call (passed as the `semantic_call` parameter) into a structured `Task` object with a `title` and a `description`. The `description` must use a specific templating language ("Template-B") to reference the parameters of the inner semantic call.
+
+### Applied Directives
+The following directives from the `@compile{}` block were identified and applied:
+
+1.  **Role Definition**: The system prompt establishes the persona of a "Task Generator" for the execution LLM, as requested. It is framed as translating a function call into a task for a general agent.
+2.  **Ignorance of Semantic Python**: The prompts are carefully worded to avoid any meta-language about "Semantic Python," "compilation," or "semantic calls." The context is presented as analyzing an "abstract function call."
+3.  **Template-B for Output**: The system prompt explicitly teaches the execution LLM the "Template-B" syntax (`<%= var %>`, `<% .each do |...| %>`) for use within the generated `description` field. This includes rules for positional, keyword, and field access.
+4.  **Strict Return Schema**: The system prompt commands the LLM to return a single JSON object strictly conforming to the `Task` JSON schema provided in the compilation task.
+5.  **Template-A for Input**: The user prompt template uses "Template-A" syntax (`<<var>>`, `<:loop:>`) to dynamically inject the details of the `semantic_call` object (`<<arg0>>`) into the prompt for the execution LLM.
+6.  **Teaching Template-B**: The system prompt dedicates a significant section to explaining Template-B, its syntax, and provides a clear example, fulfilling the directive to teach the LLM how to use it.
+7.  **Template Language Limitations**: The system prompt states that Template-B only supports variable substitution and loops, as specified in the directives.
+8.  **Readability and Structure**: The prompts are structured with markdown for clarity. Both the system and user prompts encourage the LLM to generate well-structured and readable output.
+
+### Conflicts / Ignored Directives
+- No conflicting or ambiguous directives were found. All instructions were clear and have been implemented.
+
+### Key Compilation Decisions
+- The **System Prompt** is dedicated to setting the stage: defining the persona (Task Generator), the rules of engagement (output format, Template-B syntax), and the overall goal. This is a one-time setup for the persona.
+- The **User Prompt** is designed to be the runtime input, providing the specific data for each `do_generate_task` call. It uses Template-A to structure the incoming `SemanticCall` object (`<<arg0>>`) into a readable format for the LLM.
+- A clear distinction is made between the compiler's templating (Template-A, used to create the prompts) and the execution LLM's required templating output (Template-B, which must appear in the `description` string inside the final JSON).
+==79296e9a-d1a1-4a16-a34f-606e9ae3511a==END_NOTES==
+/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:1df22b22adf5c8cf048f70aa69321d9f

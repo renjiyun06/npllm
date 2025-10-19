@@ -1613,6 +1613,7 @@ name = "npllm"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "ipynbname" },
     { name = "jinja2" },
     { name = "json-repair" },
@@ -1622,6 +1623,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "prompt-toolkit" },
     { name = "pydantic" },
+    { name = "requests" },
     { name = "rich" },
 ]
 
@@ -1632,6 +1634,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "ipynbname", specifier = ">=2025.8.0.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "json-repair", specifier = ">=0.51.0" },
@@ -1641,6 +1644,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.16.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.11.9" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "rich", specifier = ">=14.1.0" },
 ]
 

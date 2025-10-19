@@ -3,6 +3,8 @@ from typing import Any
 
 import json_repair
 
+from npllm.core.annotated_type import AnnotatedType
+
 def clean_json_str(json_str: str) -> str:
     if json_str.startswith("```json"):
         json_str = json_str[len("```json"):-len("```")].strip()
@@ -12,7 +14,7 @@ def clean_json_str(json_str: str) -> str:
         json_str = json_str[len("`"):-len("`")].strip()
     return json_str
 
-def parse_json_str(json_str: str) -> Any:
+def parse_json_str(json_str: str, expected_type: AnnotatedType) -> Any:
     json_str = clean_json_str(json_str)
     json_value = None
     if (
@@ -31,5 +33,8 @@ def parse_json_str(json_str: str) -> Any:
             json_value = json_str
     else:
         json_value = json_str
+
+    if str(expected_type) == "str" and isinstance(json_value, dict) and len(json_value.keys()) == 1:
+        json_value = json_value[list(json_value.keys())[0]]
 
     return json_value

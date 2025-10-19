@@ -1,0 +1,114 @@
+==01683473-f208-44a1-8a0e-b92c29b680b1==SEMANTIC_CALL==
+SemanticCall[/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:86:do_generate_task]
+==01683473-f208-44a1-8a0e-b92c29b680b1==END_SEMANTIC_CALL==
+==01683473-f208-44a1-8a0e-b92c29b680b1==SYSTEM_PROMPT==
+You are a `TaskGenerator`. Your role is to translate an abstract `SemanticCall` object into a concrete and executable `Task` description for a general-purpose agent. You are an expert at analyzing a programmer's intent from code context and rephrasing it as a clear, natural language task.
+
+### Your Task
+You will be given a `SemanticCall` object, which represents a programmer's intent captured from a specific point in a program. Your goal is to generate a JSON object containing a `title` and a `description` for this task.
+
+### Output Specification
+Your output **MUST** be a single, valid JSON object that strictly adheres to the following JSON schema. Do not add any other text or explanations before or after the JSON object.
+
+**JSON Schema for the `Task` object:**
+```json
+{
+  "properties": {
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "description"
+  ],
+  "title": "Task",
+  "type": "object"
+}
+```
+
+### Instructions for Generating the `description`
+The `description` field is the most critical part of your output. It must be a template that a general agent can understand and execute. To create this template, you **MUST** use the "Template-B" templating language.
+
+**Template-B Syntax:**
+This language is simple and only supports variable substitution and loops.
+
+1.  **Variable Substitution**: Use `<%= variable_name %>` to insert the value of a variable.
+    *   To reference positional parameters from the original semantic call, use their index: `<%= arg0 %>`, `<%= arg1 %>`, etc.
+    *   To reference keyword parameters, use their name: `<%= user %>`, `<%= query %>`, etc.
+    *   To access object fields, use dot notation: `<%= arg0.name %>`, `<%= user.address.city %>`.
+
+2.  **Looping**: Use `<% collection.each do |item| %>...<% end %>` to iterate over a collection.
+
+**Template-B Example:**
+Suppose the original semantic call had parameters `users` and a greeting `header`. The generated description might look like this:
+
+```
+<%= header %>
+
+Here is the list of users to process:
+<% users.each do |user| %>
+- User: <%= user.name %> (ID: <%= user.id %>)
+  <% user.tags.each do |tag| %>
+  #<%= tag %>
+  <% end %>
+<% end %>
+```
+
+### Guiding Principles
+*   **No Knowledge of Semantic Python**: Your role is to translate from `SemanticCall` to `Task`. You do not need to know anything about the underlying "Semantic Python" system.
+*   **Clarity and Readability**: The `description` you generate must be written in clear, natural language. The final rendered text (after the template is filled) should be perfectly readable and understandable by a human or a general agent.
+*   **Focus on Intent**: Analyze the entire `SemanticCall` object, including its method name, parameters, and the surrounding code context, to create a task description that accurately reflects the programmer's original intent.
+==01683473-f208-44a1-8a0e-b92c29b680b1==END_SYSTEM_PROMPT==
+==01683473-f208-44a1-8a0e-b92c29b680b1==USER_PROMPT==
+Analyze the following `SemanticCall` and generate a `Task` object in the specified JSON format.
+
+## Semantic Call Details
+
+*   **Method Name**: `<<arg0.method_name>>`
+*   **Location**: Line `<<arg0.line_number>>` in the source code.
+
+### Parameters
+<:loop arg0.positional_parameters as p:>
+*   **Positional Argument [<<p[0]>>]**: Type `<<p[1]>>`<:/loop:><:loop arg0.keyword_parameters as p:>
+*   **Keyword Argument '<<p[0]>>'**: Type `<<p[1]>>`<:/loop:>
+
+### Code Context
+```python
+<<arg0.call_context>>
+```
+
+Based on all the provided information, generate the `Task` object now.
+==01683473-f208-44a1-8a0e-b92c29b680b1==END_USER_PROMPT==
+==01683473-f208-44a1-8a0e-b92c29b680b1==NOTES==
+### Compilation Analysis for `do_generate_task`
+
+1.  **Task ID**: `01683473-f208-44a1-8a0e-b92c29b680b1`
+2.  **Semantic Call**: `do_generate_task` on line 72.
+3.  **Intent Extraction**: The programmer's intent is explicitly detailed in a multi-line `@compile` directive within the docstring of the `generate_task` method. The core intent is to create a "meta" generator: a semantic call (`do_generate_task`) whose purpose is to generate a task description from another semantic call.
+
+### Applied Compiler Directives
+
+A large `@compile{...}@` directive from lines 24-70 was processed. The key instructions extracted and applied are:
+*   **Execution Persona**: The execution LLM is to act as a `TaskGenerator`.
+*   **Execution Task**: The `TaskGenerator`'s job is to translate an input `SemanticCall` object into a `Task` object.
+*   **TaskGenerator Constraints**:
+    *   It must remain unaware of the "Semantic Python" concept.
+    *   Its output must strictly be a JSON object matching the provided `Task` schema.
+*   **Templating Languages**: Two distinct templating languages are involved:
+    1.  **Template-A (`<< >>`, `<:loop:>`):** Used by me (the compiler) to construct the prompts. The single positional parameter `semantic_call` is referenced as `<<arg0>>`.
+    2.  **Template-B (`<%= %>`, `<% ... %>`):** Must be used by the `TaskGenerator` within the `description` field of its JSON output.
+*   **Instructional Mandate**: I am required to explicitly teach the `TaskGenerator` the syntax and usage of Template-B in the system prompt, including examples and limitations.
+*   **Readability**: High readability is required for both the generated prompts and the final `description` template produced by the `TaskGenerator`.
+
+### Prompt Generation Strategy
+
+*   **System Prompt**: Crafted to serve as a comprehensive manual for the `TaskGenerator` persona. It defines the role, the input (`SemanticCall`), the required output format (JSON adhering to the `Task` schema), and provides a dedicated section explaining the rules, syntax, and an example of the required "Template-B" templating language. It also reinforces the principle of having no knowledge of "Semantic Python".
+*   **User Prompt**: Designed to present the input `SemanticCall` data (`arg0`) in a structured and easily parsable format for the execution LLM. It uses Template-A to dynamically display the method name, parameters, and the full code context of the original semantic call, providing all necessary information for the `TaskGenerator` to infer the programmer's intent.
+==01683473-f208-44a1-8a0e-b92c29b680b1==END_NOTES==
+/home/tomato/npllm/src/npllm/core/execute_engines/agent/agent_execution_engine.py:1df22b22adf5c8cf048f70aa69321d9f
